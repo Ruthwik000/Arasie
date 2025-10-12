@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom"
 import { useEffect } from "react"
 import Navigation from "./components/Navigation"
 import ProtectedRoute from "./components/ProtectedRoute"
@@ -18,17 +18,77 @@ import Welcome from "./pages/Welcome"
 import Feedback from "./pages/Feedback"
 import { useUserStore } from "./store/userStore"
 import { useXpStore } from "./store/xpStore"
-import useSettingsStore from "./store/settingsStore"
 import { AuthProvider, useAuth } from "./contexts/AuthContext"
+
+// Function to check if current route should hide navigation
+function shouldHideNavigation(pathname) {
+  const hideNavRoutes = [
+    // Workout category selection (gym, calisthenics, etc.)
+    /^\/workout\/[^\/]+$/, // /workout/gym
+    
+    // Workout split detail pages
+    /^\/workout\/[^\/]+\/[^\/]+$/, // /workout/gym/push-pull-legs
+    
+    // Workout day detail pages (for gym/calisthenics)
+    /^\/workout\/[^\/]+\/[^\/]+\/[^\/]+$/, // /workout/gym/push-pull-legs/push
+    
+    // Workout sessions (both day-based and sequence-based)
+    /^\/workout\/[^\/]+\/[^\/]+\/session$/, // /workout/stretching/morning-flow/session
+    /^\/workout\/[^\/]+\/[^\/]+\/[^\/]+\/session$/, // /workout/gym/push-pull-legs/push/session
+    
+    // Form analyzer routes
+    /^\/workout\/[^\/]+\/[^\/]+\/session\/[^\/]+\/analyzer/, // /workout/stretching/morning-flow/session/1/analyzer/pose-name
+    /^\/workout\/[^\/]+\/[^\/]+\/[^\/]+\/session\/[^\/]+\/analyzer/, // /workout/gym/push-pull-legs/push/session/1/analyzer/exercise-name
+    
+    // Workout completion pages
+    /^\/workout\/[^\/]+\/[^\/]+\/complete$/, // /workout/stretching/morning-flow/complete
+    /^\/workout\/[^\/]+\/[^\/]+\/[^\/]+\/complete$/, // /workout/gym/push-pull-legs/push/complete
+    
+    // Custom workout routes
+    /^\/workout\/custom\/builder$/, // /workout/custom/builder
+    /^\/workout\/custom\/my-workouts$/, // /workout/custom/my-workouts
+    /^\/workout\/custom\/[^\/]+\/session$/, // /workout/custom/123/session
+    /^\/workout\/custom\/[^\/]+\/complete$/, // /workout/custom/123/complete
+    /^\/workout\/custom\/[^\/]+\/session\/[^\/]+\/analyzer/, // /workout/custom/123/session/1/analyzer/exercise-name
+    
+    // Focus calendar
+    /^\/focus\/calendar$/, // /focus/calendar
+    
+    // Mental Health sessions (if they exist)
+    /^\/mental-health\/[^\/]+\/session$/, // /mental-health/breathing/session
+  ]
+  
+  return hideNavRoutes.some(pattern => pattern.test(pathname))
+}
 
 function AppContent() {
   const resetDaily = useUserStore(state => state.resetDaily)
   const isAuthenticated = useUserStore(state => state.isAuthenticated)
   const isChatOpen = useUserStore(state => state.isChatOpen)
+  const mentalHealthSubSection = useUserStore(state => state.mentalHealthSubSection)
+  const focusSubSection = useUserStore(state => state.focusSubSection)
   const setUser = useUserStore(state => state.setUser)
   const logout = useUserStore(state => state.logout)
   const checkAndResetDaily = useXpStore(state => state.checkAndResetDaily)
   const { currentUser, loading } = useAuth()
+  const location = useLocation()
+  
+  // Check if navigation should be hidden (route-based or sub-sections)
+  const hideNavigation = shouldHideNavigation(location.pathname) || 
+                         mentalHealthSubSection !== null || 
+                         focusSubSection !== null
+  
+  // Debug log for development (can be removed in production)
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Navigation state:', { 
+        path: location.pathname, 
+        mentalHealthSubSection, 
+        focusSubSection, 
+        hideNavigation 
+      })
+    }
+  }, [location.pathname, mentalHealthSubSection, focusSubSection, hideNavigation])
 
   // Sync Firebase auth state with Zustand store
   useEffect(() => {
@@ -80,14 +140,25 @@ function AppContent() {
   }
 
   return (
-    <BrowserRouter>
-      <div className="flex min-h-screen bg-ar-black">
-        {/* Show navigation when authenticated and chat is not open */}
-        {isAuthenticated && !isChatOpen && <Navigation />}
+    <div className="flex min-h-screen bg-ar-black">
+      {/* Show navigation when authenticated, chat is not open, and navigation should not be hidden */}
+      {isAuthenticated && !isChatOpen && !hideNavigation && <Navigation />}
 
-        {/* Main content area with conditional spacing */}
-        <main className={`flex-1 ${isAuthenticated && !isChatOpen ? 'md:ml-64 pb-24 md:pb-0 pt-20 md:pt-0 p-4 md:p-6 lg:p-8' : ''}`}>
-          <div className={`${isAuthenticated && !isChatOpen ? 'max-w-7xl mx-auto' : 'w-full'}`}>
+      {/* Main content area with conditional spacing */}
+      <main className={`flex-1 ${
+        isAuthenticated && !isChatOpen && !hideNavigation 
+          ? 'md:ml-64 pb-24 md:pb-0 pt-20 md:pt-0 p-4 md:p-6 lg:p-8' 
+          : hideNavigation && isAuthenticated
+          ? 'min-h-screen w-full' // Full-screen for sub-sections with proper height
+          : ''
+      }`}>
+        <div className={`${
+          isAuthenticated && !isChatOpen && !hideNavigation 
+            ? 'max-w-7xl mx-auto' 
+            : hideNavigation && isAuthenticated
+            ? 'w-full h-full min-h-screen' // Full width and height for sub-sections
+            : 'w-full'
+        }`}>
             <Routes>
               {/* Public routes */}
               <Route path="/" element={
@@ -158,14 +229,15 @@ function AppContent() {
           </div>
         </main>
       </div>
-    </BrowserRouter>
   )
 }
 
 function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <BrowserRouter>
+        <AppContent />
+      </BrowserRouter>
     </AuthProvider>
   )
 }

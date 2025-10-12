@@ -332,7 +332,7 @@ export default function Chat({ onBack }) {
   }
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-ar-black via-ar-black to-blue-900/20 fixed inset-0 z-50">
+    <div className="flex h-screen w-full bg-gradient-to-br from-ar-black via-ar-black to-blue-900/20 fixed inset-0 z-50">
       {/* Animated Background Elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <motion.div

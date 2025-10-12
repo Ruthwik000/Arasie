@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { motion } from "framer-motion"
 import { 
@@ -6,11 +6,13 @@ import {
   Camera, 
   Dumbbell,
   Users,
-  Heart
+  Heart,
+  X
 } from "lucide-react"
 import { workoutData } from "../../data/workoutData"
 import CameraSelectionModal from "../CameraSelectionModal"
 import { isMobile } from "../../utils/helpers"
+import { useUserStore } from "../../store/userStore"
 
 // Workout Session Component
 export default function WorkoutSession() {
@@ -19,6 +21,16 @@ export default function WorkoutSession() {
   const [currentExercise, setCurrentExercise] = useState(0)
   const [showCameraModal, setShowCameraModal] = useState(false)
   const [pendingExercise, setPendingExercise] = useState(null)
+  const [completedSets, setCompletedSets] = useState({})
+  const [workoutSession, setWorkoutSession] = useState(null)
+  const [isSaving, setIsSaving] = useState(false)
+  
+  const { 
+    startWorkoutSession, 
+    updateExerciseInSession, 
+    currentWorkoutSession,
+    saveWorkoutSession 
+  } = useUserStore()
   
   const getSessionData = () => {
     const splitData = workoutData[category]?.[splitId]
@@ -52,6 +64,49 @@ export default function WorkoutSession() {
 
   const sessionData = getSessionData()
 
+  // Initialize workout session when component mounts
+  useEffect(() => {
+    if (sessionData && !currentWorkoutSession) {
+      const workoutPlan = {
+        planName: sessionData.name,
+        planId: splitId,
+        dayId: dayId,
+        type: category,
+        exercises: sessionData.exercises.map(exercise => ({
+          ...exercise,
+          completed: false,
+          completedSets: 0,
+          totalSets: parseInt(exercise.sets) || 1,
+          setProgress: {}
+        }))
+      }
+      
+      const session = startWorkoutSession(workoutPlan)
+      setWorkoutSession(session)
+    }
+  }, [sessionData, currentWorkoutSession, startWorkoutSession, category, splitId, dayId])
+
+  // Load saved progress when currentWorkoutSession updates
+  useEffect(() => {
+    if (currentWorkoutSession && currentWorkoutSession.exercises) {
+      // Restore completed sets from saved session
+      const savedSets = {}
+      currentWorkoutSession.exercises.forEach((exercise, exerciseIndex) => {
+        if (exercise.setProgress) {
+          Object.keys(exercise.setProgress).forEach(key => {
+            savedSets[key] = exercise.setProgress[key]
+          })
+        }
+      })
+      setCompletedSets(savedSets)
+      
+      // If there's a current exercise saved, navigate to it
+      if (currentWorkoutSession.currentExercise !== undefined) {
+        setCurrentExercise(currentWorkoutSession.currentExercise)
+      }
+    }
+  }, [currentWorkoutSession])
+
   if (!sessionData) {
     return <div className="text-center text-ar-gray">Session not found</div>
   }
@@ -59,7 +114,92 @@ export default function WorkoutSession() {
   const exercise = sessionData.exercises[currentExercise]
   const isLastExercise = currentExercise === sessionData.exercises.length - 1
 
-  const handleNext = () => {
+  const handleSetComplete = (exerciseIndex, setIndex) => {
+    const key = `${exerciseIndex}-${setIndex}`
+    const newCompletedSets = {
+      ...completedSets,
+      [key]: !completedSets[key]
+    }
+    setCompletedSets(newCompletedSets)
+    
+    // Calculate completed sets count for this exercise
+    const totalSets = parseInt(exercise.sets) || 3
+    let completedCount = 0
+    for (let i = 0; i < totalSets; i++) {
+      if (newCompletedSets[`${exerciseIndex}-${i}`]) {
+        completedCount++
+      }
+    }
+    
+    // Update exercise in session with real-time saving
+    const isExerciseCompleted = completedCount === totalSets
+    updateExerciseInSession(exerciseIndex, {
+      completedSets: completedCount,
+      completed: isExerciseCompleted,
+      setProgress: newCompletedSets // Save the detailed set progress
+    })
+    
+    // Auto-save progress to Firebase
+    saveWorkoutProgress(exerciseIndex, completedCount, isExerciseCompleted, newCompletedSets)
+  }
+
+  const saveWorkoutProgress = async (exerciseIndex, completedSets, isCompleted, setProgress) => {
+    if (!currentWorkoutSession) return
+    
+    setIsSaving(true)
+    try {
+      // Create a partial workout session data for saving progress
+      const progressData = {
+        id: currentWorkoutSession.id,
+        planName: currentWorkoutSession.planName,
+        planId: currentWorkoutSession.planId,
+        dayId: currentWorkoutSession.dayId,
+        type: currentWorkoutSession.type,
+        startTime: currentWorkoutSession.startTime,
+        currentExercise: exerciseIndex,
+        exercises: currentWorkoutSession.exercises.map((ex, idx) => ({
+          ...ex,
+          completed: idx === exerciseIndex ? isCompleted : ex.completed,
+          completedSets: idx === exerciseIndex ? completedSets : ex.completedSets,
+          setProgress: idx === exerciseIndex ? setProgress : ex.setProgress
+        })),
+        isInProgress: true, // Flag to indicate this is a progress save, not completion
+        lastUpdated: new Date().toISOString()
+      }
+      
+      // Save to Firebase (this will be handled by the store)
+      await saveWorkoutSession(progressData)
+    } catch (error) {
+      console.error('Error saving workout progress:', error)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const getCompletedSetsCount = (exerciseIndex) => {
+    const totalSets = parseInt(exercise.sets) || 3
+    let completed = 0
+    for (let i = 0; i < totalSets; i++) {
+      if (completedSets[`${exerciseIndex}-${i}`]) {
+        completed++
+      }
+    }
+    return completed
+  }
+
+  const isExerciseComplete = (exerciseIndex) => {
+    const totalSets = parseInt(exercise.sets) || 3
+    return getCompletedSetsCount(exerciseIndex) === totalSets
+  }
+
+  const handleNext = async () => {
+    // Save current exercise progress before moving to next
+    if (currentWorkoutSession) {
+      const completedCount = getCompletedSetsCount(currentExercise)
+      const isCompleted = isExerciseComplete(currentExercise)
+      await saveWorkoutProgress(currentExercise, completedCount, isCompleted, completedSets)
+    }
+    
     if (isLastExercise) {
       const completePath = dayId 
         ? `/workout/${category}/${splitId}/${dayId}/complete`
@@ -142,7 +282,23 @@ export default function WorkoutSession() {
   const colors = getColorClasses()
 
   return (
-    <div className="max-w-4xl mx-auto space-y-3 md:space-y-4">
+    <div className="max-w-4xl mx-auto space-y-3 md:space-y-4 p-4 md:p-6 min-h-screen flex flex-col justify-center">
+      {/* Exit Button */}
+      <motion.div
+        className="flex justify-end mb-2"
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        <button
+          onClick={() => navigate(`/workout/${category}/${splitId}`)}
+          className="p-2 rounded-full bg-ar-dark-gray/50 hover:bg-ar-dark-gray/70 transition-colors duration-200 backdrop-blur-sm"
+          aria-label="Exit workout session"
+        >
+          <X className="w-5 h-5 text-ar-gray hover:text-white transition-colors" />
+        </button>
+      </motion.div>
+
       {/* Progress Bar */}
       <motion.div
         className="glass-card p-3 md:p-4 rounded-2xl"
@@ -201,6 +357,37 @@ export default function WorkoutSession() {
         </p>
         <p className="text-ar-gray mb-3 md:mb-4">{exercise.description}</p>
 
+        {/* Set Tracking Circles - Only show for exercises with sets */}
+        {exercise.sets && (
+          <div className="mb-4 md:mb-6">
+            <p className="text-sm text-ar-gray mb-3">Track your sets:</p>
+            <div className="flex justify-center gap-3">
+              {Array.from({ length: parseInt(exercise.sets) || 3 }, (_, index) => {
+                const isCompleted = completedSets[`${currentExercise}-${index}`]
+                return (
+                  <motion.button
+                    key={index}
+                    onClick={() => handleSetComplete(currentExercise, index)}
+                    className={`w-12 h-12 rounded-full border-2 transition-all duration-300 flex items-center justify-center font-bold ${
+                      isCompleted
+                        ? `${colors.bg} border-transparent text-white shadow-lg`
+                        : `border-ar-gray-600 text-ar-gray-400 hover:border-ar-blue/50 hover:text-ar-blue`
+                    }`}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    {index + 1}
+                  </motion.button>
+                )
+              })}
+            </div>
+            <p className="text-xs text-ar-gray mt-2">
+              {getCompletedSetsCount(currentExercise)} of {exercise.sets} sets completed
+              {isSaving && <span className="ml-2 text-ar-blue">• Saving...</span>}
+            </p>
+          </div>
+        )}
+
         <div className="flex flex-col gap-2 md:gap-3 justify-center px-4 md:px-0">
           {exercise.pose_analyzer && (
             <button
@@ -221,7 +408,11 @@ export default function WorkoutSession() {
             <div className="flex items-center justify-center gap-2">
               <CheckCircle size={18} className="md:w-5 md:h-5" />
               <span className="text-sm md:text-base">
-                {isLastExercise ? 'Finish Session' : 'Exercise Done'}
+                {getCompletedSetsCount(currentExercise) > 0 && exercise.sets
+                  ? `Continue (${getCompletedSetsCount(currentExercise)}/${exercise.sets} sets)`
+                  : isLastExercise 
+                  ? 'Finish Session' 
+                  : 'Next Exercise'}
               </span>
             </div>
           </button>

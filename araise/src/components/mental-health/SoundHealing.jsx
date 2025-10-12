@@ -103,7 +103,7 @@ export default function SoundHealing({ onBack }) {
   }
 
   return (
-    <div className="max-w-2xl mx-auto pt-6">
+    <div className="max-w-2xl mx-auto pt-6 px-4 md:px-6 min-h-screen">
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}

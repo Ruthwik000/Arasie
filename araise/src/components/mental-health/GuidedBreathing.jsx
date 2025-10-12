@@ -226,14 +226,14 @@ export default function GuidedBreathing({ onBack }) {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen w-full">
       {/* Dynamic background gradient based on selected exercise */}
       <div className={`fixed inset-0 bg-gradient-to-br ${selectedExercise
         ? breathingExercises.find(ex => ex.id === selectedExercise)?.gradient
         : 'from-ar-gray-900 to-ar-gray-800'
         } opacity-10 transition-all duration-1000`} />
 
-      <div className="relative z-10 max-w-6xl mx-auto pt-6 px-4">
+      <div className="relative z-10 max-w-6xl mx-auto pt-6 px-4 pb-6 min-h-screen flex flex-col">
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}

@@ -48,6 +48,8 @@ export const useUserStore = create(
 
       // UI state
       isChatOpen: false,
+      mentalHealthSubSection: null, // Track active mental health sub-section
+      focusSubSection: null, // Track active focus sub-section
 
       // Workout session state
       currentWorkoutSession: null,
@@ -100,6 +102,8 @@ export const useUserStore = create(
 
       // UI actions
       setChatOpen: (isOpen) => set({ isChatOpen: isOpen }),
+      setMentalHealthSubSection: (section) => set({ mentalHealthSubSection: section }),
+      setFocusSubSection: (section) => set({ focusSubSection: section }),
 
 
 
@@ -326,7 +330,18 @@ export const useUserStore = create(
         }
 
         try {
-          // Check if the function exists
+          // If this is an in-progress workout, save to a different collection/field
+          if (workoutSessionData.isInProgress) {
+            // Save progress to Firebase without marking workout as completed
+            if (state.firebaseService.saveWorkoutProgress) {
+              await state.firebaseService.saveWorkoutProgress(workoutSessionData);
+            }
+            // Update current session in state
+            set({ currentWorkoutSession: workoutSessionData });
+            return;
+          }
+
+          // Check if the function exists for completed workouts
           if (!state.firebaseService.saveWorkoutSession) {
             // Fallback to old method with new data structure
             const legacyData = {
@@ -366,8 +381,30 @@ export const useUserStore = create(
 
 
 
+      // Load workout progress
+      loadWorkoutProgress: async (planId, dayId = null) => {
+        const state = get();
+        if (!state.firebaseService || !state.firebaseService.loadWorkoutProgress) {
+          return null;
+        }
+
+        try {
+          const progress = await state.firebaseService.loadWorkoutProgress(planId, dayId);
+          if (progress) {
+            set({ currentWorkoutSession: progress });
+          }
+          return progress;
+        } catch (error) {
+          console.error('Error loading workout progress:', error);
+          return null;
+        }
+      },
+
       // Start workout session
       startWorkoutSession: (workoutPlan) => {
+        // First check if there's existing progress for this workout
+        const state = get();
+
         const session = {
           id: Date.now(),
           planName: workoutPlan.planName,
@@ -375,13 +412,15 @@ export const useUserStore = create(
           dayId: workoutPlan.dayId,
           type: workoutPlan.type || "split",
           startTime: new Date().toISOString(),
+          currentExercise: 0,
           exercises: workoutPlan.exercises.map(exercise => ({
             ...exercise,
             completed: false,
             completedSets: 0,
             completedReps: [],
             actualWeight: [],
-            notes: ""
+            notes: "",
+            setProgress: {}
           }))
         };
 
@@ -389,6 +428,9 @@ export const useUserStore = create(
           currentWorkoutSession: session,
           workoutStartTime: new Date().toISOString()
         });
+
+        // Try to load existing progress
+        state.loadWorkoutProgress(workoutPlan.planId, workoutPlan.dayId);
 
         console.log('Workout session started:', session);
         return session;
@@ -786,7 +828,13 @@ export const useUserStore = create(
             state.customWorkouts
           );
 
-          set({ customWorkouts: updatedWorkouts });
+          // Sort workouts by creation date (latest first)
+          const sortedWorkouts = updatedWorkouts.sort((a, b) => {
+            const dateA = new Date(a.created || 0);
+            const dateB = new Date(b.created || 0);
+            return dateB - dateA; // Descending order (latest first)
+          });
+          set({ customWorkouts: sortedWorkouts });
           return newWorkout;
         } catch (error) {
           console.error('Error saving custom workout:', error);
@@ -809,7 +857,13 @@ export const useUserStore = create(
             state.customWorkouts
           );
 
-          set({ customWorkouts: updatedWorkouts });
+          // Sort workouts by creation date (latest first)
+          const sortedWorkouts = updatedWorkouts.sort((a, b) => {
+            const dateA = new Date(a.created || 0);
+            const dateB = new Date(b.created || 0);
+            return dateB - dateA; // Descending order (latest first)
+          });
+          set({ customWorkouts: sortedWorkouts });
           return updatedWorkouts;
         } catch (error) {
           console.error('Error updating custom workout:', error);
@@ -831,7 +885,13 @@ export const useUserStore = create(
             state.customWorkouts
           );
 
-          set({ customWorkouts: updatedWorkouts });
+          // Sort workouts by creation date (latest first)
+          const sortedWorkouts = updatedWorkouts.sort((a, b) => {
+            const dateA = new Date(a.created || 0);
+            const dateB = new Date(b.created || 0);
+            return dateB - dateA; // Descending order (latest first)
+          });
+          set({ customWorkouts: sortedWorkouts });
           return updatedWorkouts;
         } catch (error) {
           console.error('Error deleting custom workout:', error);
@@ -849,8 +909,14 @@ export const useUserStore = create(
 
         try {
           const workouts = await state.firebaseService.getCustomWorkouts();
-          set({ customWorkouts: workouts });
-          return workouts;
+          // Sort workouts by creation date (latest first)
+          const sortedWorkouts = workouts.sort((a, b) => {
+            const dateA = new Date(a.created || 0);
+            const dateB = new Date(b.created || 0);
+            return dateB - dateA; // Descending order (latest first)
+          });
+          set({ customWorkouts: sortedWorkouts });
+          return sortedWorkouts;
         } catch (error) {
           console.error('Error loading custom workouts:', error);
           return [];
@@ -1208,7 +1274,9 @@ export const useUserStore = create(
       name: 'araise-user-store',
       // Only persist minimal UI state - Firebase handles all data
       partialize: (state) => ({
-        isChatOpen: state.isChatOpen
+        isChatOpen: state.isChatOpen,
+        mentalHealthSubSection: state.mentalHealthSubSection,
+        focusSubSection: state.focusSubSection
       }),
     }
   )

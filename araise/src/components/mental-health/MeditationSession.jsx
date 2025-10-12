@@ -85,7 +85,7 @@ export default function MeditationSession({ meditation, onBack }) {
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
 
   return (
-    <div className="max-w-2xl mx-auto pt-6">
+    <div className="max-w-2xl mx-auto pt-6 px-4 md:px-6 min-h-screen">
       <audio
         ref={audioRef}
         src={meditation.audioSrc}

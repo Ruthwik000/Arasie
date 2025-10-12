@@ -31,13 +31,13 @@ export default function WorkoutHub() {
       id: 'custom',
       title: 'Custom Workouts',
       description: 'Build your own hybrid training routines',
-      backgroundImage: '/images/workout-categories/custom.jpg', // Using gym image as fallback for now
+      backgroundImage: '/images/workout-categories/custom.jpg',
       color: 'orange'
     }
   ]
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
+    <div className="max-w-6xl mx-auto space-y-8 p-4 md:p-6 min-h-screen">
       <motion.div
         className="text-center"
         initial={{ opacity: 0, y: -20 }}

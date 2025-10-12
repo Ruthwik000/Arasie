@@ -58,16 +58,21 @@ export default function MentalHealth() {
   const [selectedMood, setSelectedMood] = useState(null)
   const [moodMessage, setMoodMessage] = useState('')
 
-  const { name, updateMentalHealthProgress, setChatOpen, logMentalHealthEntry } = useUserStore()
+  const { name, updateMentalHealthProgress, setChatOpen, logMentalHealthEntry, setMentalHealthSubSection } = useUserStore()
 
-  // Handle chat state when activeSection changes
+  // Handle UI state when activeSection changes
   useEffect(() => {
     if (activeSection === 'chat') {
       setChatOpen(true)
+      setMentalHealthSubSection('chat')
+    } else if (activeSection === 'main') {
+      setChatOpen(false)
+      setMentalHealthSubSection(null)
     } else {
       setChatOpen(false)
+      setMentalHealthSubSection(activeSection)
     }
-  }, [activeSection, setChatOpen])
+  }, [activeSection, setChatOpen, setMentalHealthSubSection])
 
   const handleBackToMain = () => {
     setActiveSection('main')

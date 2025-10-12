@@ -42,7 +42,7 @@ export default function SplitDetail() {
   const days = isSequenceBased ? null : Object.entries(split.days || {})
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
+    <div className="max-w-6xl mx-auto space-y-8 p-4 md:p-6 min-h-screen">
       <motion.div
         className="flex items-center gap-4"
         initial={{ opacity: 0, y: -20 }}

@@ -45,7 +45,8 @@ export default function Focus() {
     updateFocusTaskProgress, 
     addFocusTaskReflection,
     focusTasks = [],
-    dailyFocusGoal = 60
+    dailyFocusGoal = 60,
+    setFocusSubSection
   } = useUserStore()
 
   const { xp, level, streakDays, awardXp, touchStreak, checkAndResetDaily, getDailyProgress } = useXpStore()
@@ -62,6 +63,15 @@ export default function Focus() {
     
     return () => clearInterval(interval)
   }, [checkAndResetDaily])
+
+  // Track focus sub-section state for navigation hiding
+  useEffect(() => {
+    if (activeView === 'dashboard') {
+      setFocusSubSection(null)
+    } else {
+      setFocusSubSection(activeView)
+    }
+  }, [activeView, setFocusSubSection])
 
   // Function to trigger dashboard refresh
   const refreshDashboard = () => {
