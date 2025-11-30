@@ -59,6 +59,10 @@ export default function Chat({ onBack }) {
       if (speechSynthRef.current) {
         speechSynthRef.current.cancel()
       }
+      // Ensure body styles are reset on unmount
+      document.body.style.overflow = ''
+      document.body.style.position = ''
+      document.body.style.width = ''
     }
   }, [])
 
@@ -329,6 +333,12 @@ export default function Chat({ onBack }) {
 
   const handleVoiceModalClose = () => {
     setShowVoiceModal(false)
+    // Ensure body styles are reset
+    setTimeout(() => {
+      document.body.style.overflow = ''
+      document.body.style.position = ''
+      document.body.style.width = ''
+    }, 100)
   }
 
   return (
