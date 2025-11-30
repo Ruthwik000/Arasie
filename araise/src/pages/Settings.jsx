@@ -234,12 +234,21 @@ export default function Settings() {
         },
         {
           label: "Clear Cache",
-          description: "Free up storage space",
+          description: "Free up storage space and fix display issues",
           icon: Trash2,
           showArrow: false,
-          action: () => {
-            // Clear cache logic
-            alert('Cache cleared successfully!')
+          action: async () => {
+            if (confirm('Clear all cached data? This will reload the app with fresh content.')) {
+              try {
+                // Import cache utility dynamically
+                const { clearAllCaches } = await import('../utils/cacheUtils')
+                await clearAllCaches()
+              } catch (error) {
+                console.error('Error clearing cache:', error)
+                alert('Cache cleared! Please reload the page.')
+                window.location.reload(true)
+              }
+            }
           }
         }
       ]

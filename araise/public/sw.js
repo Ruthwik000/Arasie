@@ -1,84 +1,122 @@
-const CACHE_NAME = 'araise-v2'
-const urlsToCache = [
-  '/',
-  '/dashboard',
-  '/workout',
-  '/water',
-  '/diet',
-  '/static/css/main.css',
-  '/static/js/main.js',
-  '/manifest.json'
-]
+const CACHE_NAME = 'araise-v4'
+const RUNTIME_CACHE = 'araise-runtime-v4'
+const isDevelopment = self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1'
 
-// Install event - cache resources
+// Install event - skip waiting to activate immediately
 self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('Opened cache')
-        return cache.addAll(urlsToCache)
-      })
-      .then(() => {
-        console.log('Service worker installed')
-        return self.skipWaiting()
-      })
-      .catch(error => {
-        console.error('Service worker installation failed:', error)
-      })
-  )
+  console.log('Service worker installing...')
+  
+  // Always skip waiting to ensure new version activates immediately
+  event.waitUntil(self.skipWaiting())
 })
 
-// Fetch event - serve from cache when offline
+// Fetch event - Network First strategy for HTML, Cache First for assets
 self.addEventListener('fetch', event => {
-  event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        // Return cached version or fetch from network
-        if (response) {
+  // In development, skip service worker caching entirely
+  if (isDevelopment) {
+    return
+  }
+  
+  // Skip WebSocket and HMR requests
+  if (event.request.url.includes('/@vite') || 
+      event.request.url.includes('/__vite') ||
+      event.request.url.includes('.hot-update.') ||
+      event.request.destination === 'websocket') {
+    return
+  }
+
+  const { request } = event
+  const url = new URL(request.url)
+
+  // Network First for HTML/navigation requests (ensures fresh header/footer)
+  if (request.mode === 'navigate' || request.destination === 'document' || 
+      url.pathname.endsWith('.html') || url.pathname === '/' || 
+      !url.pathname.includes('.')) {
+    event.respondWith(
+      fetch(request)
+        .then(response => {
+          // Cache the fresh response
+          if (response && response.status === 200) {
+            const responseToCache = response.clone()
+            caches.open(RUNTIME_CACHE).then(cache => {
+              cache.put(request, responseToCache)
+            })
+          }
           return response
+        })
+        .catch(() => {
+          // Fallback to cache if network fails
+          return caches.match(request).then(cachedResponse => {
+            return cachedResponse || caches.match('/')
+          })
+        })
+    )
+    return
+  }
+
+  // Cache First for static assets (JS, CSS, images, fonts)
+  if (request.destination === 'script' || 
+      request.destination === 'style' || 
+      request.destination === 'image' ||
+      request.destination === 'font' ||
+      url.pathname.match(/\.(js|css|png|jpg|jpeg|svg|gif|woff|woff2|ttf|eot)$/)) {
+    event.respondWith(
+      caches.match(request).then(cachedResponse => {
+        if (cachedResponse) {
+          // Return cached version and update in background
+          fetch(request).then(response => {
+            if (response && response.status === 200) {
+              caches.open(RUNTIME_CACHE).then(cache => {
+                cache.put(request, response)
+              })
+            }
+          }).catch(() => {})
+          return cachedResponse
         }
         
-        // Important: Clone the request because it's a stream
-        const fetchRequest = event.request.clone()
-        
-        return fetch(fetchRequest).then(response => {
-          // Check if we received a valid response
-          if (!response || response.status !== 200 || response.type !== 'basic') {
-            return response
+        // Not in cache, fetch from network
+        return fetch(request).then(response => {
+          if (response && response.status === 200) {
+            const responseToCache = response.clone()
+            caches.open(RUNTIME_CACHE).then(cache => {
+              cache.put(request, responseToCache)
+            })
           }
-          
-          // Important: Clone the response because it's a stream
-          const responseToCache = response.clone()
-          
-          caches.open(CACHE_NAME)
-            .then(cache => {
-              cache.put(event.request, responseToCache)
-            })
-            .catch(error => {
-              console.warn('Failed to cache response:', error)
-            })
-          
           return response
-        }).catch(error => {
-          console.warn('Fetch failed:', error)
-          // Return a fallback page for navigation requests when offline
-          if (event.request.destination === 'document') {
-            return caches.match('/')
-          }
-          // Return a generic error response for other requests
-          return new Response('Network error', { status: 408, statusText: 'Request Timeout' })
         })
+      })
+    )
+    return
+  }
+
+  // Network First for API calls and other requests
+  event.respondWith(
+    fetch(request)
+      .then(response => {
+        if (response && response.status === 200) {
+          const responseToCache = response.clone()
+          caches.open(RUNTIME_CACHE).then(cache => {
+            cache.put(request, responseToCache)
+          })
+        }
+        return response
+      })
+      .catch(() => {
+        return caches.match(request)
       })
   )
 })
 
-// Activate event - clean up old caches
+// Activate event - clean up old caches and take control immediately
 self.addEventListener('activate', event => {
+  console.log('Service worker activating...')
+  
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
         cacheNames.map(cacheName => {
-          if (cacheName !== CACHE_NAME) {
+          // Delete all old caches
+          if (cacheName !== CACHE_NAME && cacheName !== RUNTIME_CACHE) {
             console.log('Deleting old cache:', cacheName)
             return caches.delete(cacheName)
           }
@@ -86,6 +124,7 @@ self.addEventListener('activate', event => {
       )
     }).then(() => {
       console.log('Service worker activated')
+      // Take control of all pages immediately
       return self.clients.claim()
     })
   )
@@ -95,6 +134,22 @@ self.addEventListener('activate', event => {
 self.addEventListener('message', event => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting()
+  }
+  
+  // Clear cache on demand
+  if (event.data && event.data.type === 'CLEAR_CACHE') {
+    event.waitUntil(
+      caches.keys().then(cacheNames => {
+        return Promise.all(
+          cacheNames.map(cacheName => caches.delete(cacheName))
+        )
+      }).then(() => {
+        console.log('All caches cleared')
+        return self.clients.matchAll()
+      }).then(clients => {
+        clients.forEach(client => client.postMessage({ type: 'CACHE_CLEARED' }))
+      })
+    )
   }
 })
 
