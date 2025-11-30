@@ -445,14 +445,39 @@ export default function VoiceModal({
         }
     }, [isOpen])
 
+    // Prevent body scroll when modal is open
+    useEffect(() => {
+        if (isOpen) {
+            document.body.style.overflow = 'hidden'
+            document.body.style.position = 'fixed'
+            document.body.style.width = '100%'
+        } else {
+            document.body.style.overflow = ''
+            document.body.style.position = ''
+            document.body.style.width = ''
+        }
+        
+        return () => {
+            document.body.style.overflow = ''
+            document.body.style.position = ''
+            document.body.style.width = ''
+        }
+    }, [isOpen])
+
     return (
-        <AnimatePresence>
+        <AnimatePresence mode="wait" onExitComplete={() => {
+            // Ensure cleanup after animation completes
+            document.body.style.overflow = ''
+            document.body.style.position = ''
+            document.body.style.width = ''
+        }}>
             {isOpen && (
                 <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     className="fixed inset-0 bg-black z-[60] flex items-center justify-center"
+                    style={{ isolation: 'isolate' }}
                 >
                     {/* Enhanced Background */}
                     <div className="absolute inset-0 bg-gradient-to-b from-gray-900 via-black to-gray-900" />
