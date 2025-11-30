@@ -7,9 +7,12 @@ export default defineConfig({
   base: '/',
   server: {
     port: 3000,
-    host: true,
+    host: 'localhost',
     strictPort: false, // Allow fallback to other ports if 3000 is busy
     open: true,
+    hmr: {
+      overlay: true,
+    },
   },
   build: {
     outDir: 'dist',
@@ -17,6 +20,9 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       output: {
+        entryFileNames: 'assets/[name].[hash].js',
+        chunkFileNames: 'assets/[name].[hash].js',
+        assetFileNames: 'assets/[name].[hash].[ext]',
         manualChunks: {
           firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/analytics'],
           vendor: ['react', 'react-dom', 'react-router-dom'],
