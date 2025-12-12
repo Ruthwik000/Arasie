@@ -36,7 +36,23 @@ export default function WorkoutSession() {
     const splitData = workoutData[category]?.[splitId]
     if (!splitData) return null
     
-    // Handle sequence-based (stretching & yoga)
+    // Handle exercise-based (stretching programs with exercises array)
+    if (splitData.exercises && !splitData.days) {
+      return {
+        name: splitData.name,
+        exercises: splitData.exercises.map((exercise, index) => ({
+          id: exercise.id || index + 1,
+          exerciseName: exercise.name,
+          reps: exercise.duration,
+          description: exercise.description || '',
+          pose_analyzer: exercise.pose_analyzer || false,
+          isPose: true,
+          isStretch: true
+        }))
+      }
+    }
+    
+    // Handle sequence-based (yoga with sequence array)
     if (splitData.sequence) {
       return {
         name: splitData.name,
@@ -54,7 +70,7 @@ export default function WorkoutSession() {
     // Handle day-based (gym/calisthenics)
     if (dayId && splitData.days?.[dayId]) {
       return {
-        name: splitData.days[dayId].splitDay,
+        name: splitData.days[dayId].splitDay || splitData.days[dayId].name,
         exercises: splitData.days[dayId].exercises
       }
     }
@@ -355,7 +371,9 @@ export default function WorkoutSession() {
         <p className={`${colors.text} text-lg md:text-xl font-bold mb-1`}>
           {exercise.sets ? `${exercise.sets} sets × ${exercise.reps} reps` : exercise.reps}
         </p>
-        <p className="text-ar-gray mb-3 md:mb-4">{exercise.description}</p>
+        {exercise.description && (
+          <p className="text-ar-gray mb-3 md:mb-4">{exercise.description}</p>
+        )}
 
         {/* Set Tracking Circles - Only show for exercises with sets */}
         {exercise.sets && (
@@ -412,6 +430,8 @@ export default function WorkoutSession() {
                   ? `Continue (${getCompletedSetsCount(currentExercise)}/${exercise.sets} sets)`
                   : isLastExercise 
                   ? 'Finish Session' 
+                  : exercise.isStretch || exercise.isPose
+                  ? 'Next Stretch'
                   : 'Next Exercise'}
               </span>
             </div>
