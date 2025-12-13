@@ -164,8 +164,8 @@ export default function CategorySelection() {
             transition={{ duration: 0.6, delay: 0.3 }}
           >
             <div className="max-w-md mx-auto">
-              <div className="p-4 rounded-full bg-ar-violet/20 w-fit mx-auto mb-4">
-                <Plus size={32} className="text-ar-violet" />
+              <div className="p-4 rounded-full bg-ar-blue/20 w-fit mx-auto mb-4">
+                <Plus size={32} className="text-ar-blue" />
               </div>
               <h3 className="text-2xl font-bold mb-4">Create Custom Workout</h3>
               <p className="text-ar-gray mb-6">
@@ -173,7 +173,13 @@ export default function CategorySelection() {
               </p>
               <button
                 onClick={() => navigate('/workout/custom/builder')}
-                className="bg-ar-violet hover:bg-ar-violet/80 text-white font-bold py-3 px-8 rounded-xl transition-all duration-300 hover:shadow-glow-violet"
+                className="text-white font-bold py-3 px-8 rounded-xl transition-all duration-300 hover:scale-105"
+                style={{
+                  background: 'rgba(59, 130, 246, 0.15)',
+                  backdropFilter: 'blur(10px)',
+                  border: '1px solid rgba(59, 130, 246, 0.3)',
+                  boxShadow: '0 4px 16px rgba(59, 130, 246, 0.2)',
+                }}
               >
                 Start Building
               </button>
@@ -227,7 +233,7 @@ export default function CategorySelection() {
                 {customWorkouts.slice(0, 6).map((workout, index) => (
                   <motion.div
                     key={workout.id}
-                    className="glass-card p-4 rounded-xl group hover:border-ar-violet/50 transition-all duration-300"
+                    className="glass-card p-4 rounded-xl group hover:border-ar-blue/50 transition-all duration-300"
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.4, delay: index * 0.1 }}
@@ -238,7 +244,7 @@ export default function CategorySelection() {
                         <h4 className="font-bold text-white mb-1 line-clamp-1">
                           {workout.name}
                         </h4>
-                        <p className="text-ar-violet text-xs mb-1 capitalize">
+                        <p className="text-ar-blue text-xs mb-1 capitalize">
                           {workout.goal || 'Custom'}
                         </p>
                         <p className="text-ar-gray text-xs">
@@ -258,7 +264,7 @@ export default function CategorySelection() {
                     
                     <button
                       onClick={() => navigate(`/workout/custom/${workout.id}/session`)}
-                      className="w-full bg-ar-violet/20 hover:bg-ar-violet/30 text-ar-violet font-bold py-2 rounded-lg transition-all duration-300 border border-ar-violet/30 hover:border-ar-violet/50 text-sm"
+                      className="w-full bg-ar-blue/20 hover:bg-ar-blue/30 text-ar-blue font-bold py-2 rounded-lg transition-all duration-300 border border-ar-blue/30 hover:border-ar-blue/50 text-sm"
                     >
                       <div className="flex items-center justify-center gap-2">
                         <Play size={14} />
@@ -274,7 +280,7 @@ export default function CategorySelection() {
               <div className="text-center">
                 <button
                   onClick={() => navigate('/workout/custom/my-workouts')}
-                  className="text-ar-violet hover:text-ar-violet/80 font-medium transition-colors duration-300"
+                  className="text-ar-blue hover:text-ar-blue/80 font-medium transition-colors duration-300"
                 >
                   View All {customWorkouts.length} Workouts →
                 </button>
