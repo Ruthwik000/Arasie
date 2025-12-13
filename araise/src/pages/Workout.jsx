@@ -446,6 +446,7 @@ function CustomWorkoutBuilder() {
   const [workoutGoal, setWorkoutGoal] = useState('')
   const [selectedExercises, setSelectedExercises] = useState([])
   const [currentCategory, setCurrentCategory] = useState('gym')
+  const [currentMuscleGroup, setCurrentMuscleGroup] = useState('chest')
   const [isSaving, setIsSaving] = useState(false)
 
   const addExercise = (exercise) => {
@@ -605,7 +606,7 @@ function CustomWorkoutBuilder() {
           <button
             onClick={saveWorkout}
             disabled={!workoutName || selectedExercises.length === 0 || isSaving}
-            className="w-full mt-6 bg-ar-violet hover:bg-ar-violet/80 disabled:bg-ar-gray disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-all duration-300"
+            className="w-full mt-6 bg-ar-blue hover:bg-ar-blue/80 disabled:bg-ar-gray disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition-all duration-300"
           >
             {isSaving ? 'Saving...' : 'Save Workout'}
           </button>
@@ -615,29 +616,60 @@ function CustomWorkoutBuilder() {
         <div className="lg:col-span-2 space-y-6">
           {/* Category Tabs */}
           <div className="flex gap-2 overflow-x-auto">
-            {Object.keys(exerciseLibrary || {}).map((category) => (
+            {Object.keys(exerciseCategories || {}).map((category) => (
               <button
                 key={category}
-                onClick={() => setCurrentCategory(category)}
+                onClick={() => {
+                  setCurrentCategory(category)
+                  // Set first muscle group when switching categories
+                  const muscleGroups = Object.keys(customWorkoutExercises[category] || {})
+                  if (muscleGroups.length > 0) {
+                    setCurrentMuscleGroup(muscleGroups[0])
+                  }
+                }}
                 className={`px-4 py-2 rounded-xl font-medium transition-all duration-300 whitespace-nowrap ${currentCategory === category
                     ? 'bg-ar-blue text-white'
                     : 'bg-white/10 text-ar-gray hover:bg-white/20'
                   }`}
               >
-                {category.charAt(0).toUpperCase() + category.slice(1)}
+                {exerciseCategories[category]?.name || category.charAt(0).toUpperCase() + category.slice(1)}
               </button>
             ))}
           </div>
 
+          {/* Muscle Group Tabs (for gym category) */}
+          {currentCategory === 'gym' && (
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              {Object.keys(customWorkoutExercises.gym || {}).map((muscleGroup) => {
+                const groupInfo = exerciseCategories.gym.muscleGroups[muscleGroup]
+                return (
+                  <button
+                    key={muscleGroup}
+                    onClick={() => setCurrentMuscleGroup(muscleGroup)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-300 whitespace-nowrap ${currentMuscleGroup === muscleGroup
+                        ? 'bg-ar-blue text-white'
+                        : 'bg-white/5 text-ar-gray hover:bg-white/10'
+                      }`}
+                  >
+                    {groupInfo?.name || muscleGroup.charAt(0).toUpperCase() + muscleGroup.slice(1)} ({groupInfo?.count || 0})
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
           {/* Exercise Grid */}
           <motion.div
             className="grid grid-cols-1 md:grid-cols-2 gap-4"
-            key={currentCategory}
+            key={`${currentCategory}-${currentMuscleGroup}`}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
           >
-            {(exerciseLibrary[currentCategory] || []).map((exercise) => (
+            {(currentCategory === 'gym' 
+              ? customWorkoutExercises.gym[currentMuscleGroup] || []
+              : exerciseLibrary[currentCategory] || []
+            ).map((exercise) => (
               <div key={exercise.id} className="glass-card p-4 rounded-xl">
                 <div className="flex items-start justify-between mb-3">
                   <div>
@@ -664,7 +696,7 @@ function CustomWorkoutBuilder() {
                   </p>
                 )}
                 {exercise.pose_analyzer && (
-                  <div className="flex items-center gap-2 text-ar-violet text-xs">
+                  <div className="flex items-center gap-2 text-ar-blue text-xs">
                     <Camera size={12} />
                     <span>AI Form Analysis</span>
                   </div>
@@ -750,7 +782,7 @@ function MyCustomWorkouts() {
           <p className="text-ar-gray mb-6">Create your first custom workout to get started</p>
           <button
             onClick={() => navigate('/workout/custom/builder')}
-            className="bg-ar-violet hover:bg-ar-violet/80 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300"
+            className="bg-ar-blue hover:bg-ar-blue/80 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300"
           >
             Create Workout
           </button>
