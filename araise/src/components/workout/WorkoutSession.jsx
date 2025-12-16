@@ -539,22 +539,6 @@ export default function WorkoutSession() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-3 md:space-y-4 p-4 md:p-6 min-h-screen flex flex-col justify-center">
-      {/* Exit Button */}
-      <motion.div
-        className="flex justify-end mb-2"
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-      >
-        <button
-          onClick={handleExitClick}
-          className="p-2 rounded-full bg-ar-dark-gray/50 hover:bg-ar-dark-gray/70 transition-colors duration-200 backdrop-blur-sm"
-          aria-label="Exit workout session"
-        >
-          <X className="w-5 h-5 text-ar-gray hover:text-white transition-colors" />
-        </button>
-      </motion.div>
-
       {/* Exit Confirmation Modal */}
       <AnimatePresence>
         {showExitConfirmation && (
@@ -593,7 +577,7 @@ export default function WorkoutSession() {
         )}
       </AnimatePresence>
 
-      {/* Progress Bar */}
+      {/* Progress Bar with Exit Button */}
       <motion.div
         className="glass-card p-3 md:p-4 rounded-2xl"
         initial={{ opacity: 0, y: -20 }}
@@ -602,9 +586,18 @@ export default function WorkoutSession() {
       >
         <div className="flex justify-between items-center mb-1 md:mb-2">
           <span className="text-ar-gray">Progress</span>
-          <span className={`${colors.text} font-bold`}>
-            {currentExercise + 1} / {sessionData.exercises.length}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className={`${colors.text} font-bold`}>
+              {currentExercise + 1} / {sessionData.exercises.length}
+            </span>
+            <button
+              onClick={handleExitClick}
+              className="p-1.5 rounded-full bg-ar-dark-gray/50 hover:bg-ar-dark-gray/70 transition-colors duration-200 backdrop-blur-sm"
+              aria-label="Exit workout session"
+            >
+              <X className="w-4 h-4 md:w-5 md:h-5 text-ar-gray hover:text-white transition-colors" />
+            </button>
+          </div>
         </div>
         <div className="w-full bg-ar-dark-gray rounded-full h-3">
           <motion.div
