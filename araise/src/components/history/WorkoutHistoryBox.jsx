@@ -187,51 +187,109 @@ export default function WorkoutHistoryBox({ activities, isExpanded, onToggle }) 
                               )}
                             </div>
                             
-                            <div className="grid grid-cols-3 gap-3 text-xs">
-                              {/* Strength exercise info */}
-                              {(exercise.sets && exercise.reps) && (
-                                <div>
-                                  <span className="text-ar-gray-400">Sets × Reps: </span>
-                                  <span className="text-red-400 font-medium">
-                                    {exercise.completedSets || 0}/{exercise.sets} × {exercise.reps}
-                                  </span>
+                            {/* Strength exercise info */}
+                            {(exercise.sets && exercise.reps) && (
+                              <div className="space-y-2">
+                                {/* Summary line */}
+                                <div className="flex items-center justify-between text-xs">
+                                  <div>
+                                    <span className="text-ar-gray-400">Target: </span>
+                                    <span className="text-red-400 font-medium">
+                                      {exercise.sets} sets × {exercise.reps} reps
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-ar-gray-400">Completed: </span>
+                                    <span className="text-red-400 font-medium">
+                                      {exercise.completedSets || 0}/{exercise.sets} sets
+                                    </span>
+                                  </div>
+                                  {exercise.weight && exercise.weight > 0 && (
+                                    <div>
+                                      <span className="text-ar-gray-400">Weight: </span>
+                                      <span className="text-red-400 font-medium">{exercise.weight}kg</span>
+                                    </div>
+                                  )}
                                 </div>
-                              )}
-                              {exercise.weight && exercise.weight > 0 && (
-                                <div>
-                                  <span className="text-ar-gray-400">Weight: </span>
-                                  <span className="text-red-400 font-medium">{exercise.weight}kg</span>
-                                </div>
-                              )}
-                              
-                              {/* Cardio exercise info */}
-                              {exercise.distance && (
-                                <div>
-                                  <span className="text-ar-gray-400">Distance: </span>
-                                  <span className="text-red-400 font-medium">{exercise.distance}km</span>
-                                </div>
-                              )}
-                              {exercise.speed && (
-                                <div>
-                                  <span className="text-ar-gray-400">Speed: </span>
-                                  <span className="text-red-400 font-medium">{exercise.speed}km/h</span>
-                                </div>
-                              )}
-                              {exercise.calories && (
-                                <div>
-                                  <span className="text-ar-gray-400">Calories: </span>
-                                  <span className="text-red-400 font-medium">{exercise.calories}</span>
-                                </div>
-                              )}
-                              
-                              {/* Time-based exercise info */}
-                              {exercise.restTime && (
-                                <div>
-                                  <span className="text-ar-gray-400">Rest: </span>
-                                  <span className="text-red-400 font-medium">{exercise.restTime}s</span>
-                                </div>
-                              )}
-                            </div>
+                                
+                                {/* Display actual reps per set if available */}
+                                {exercise.setProgress && Object.keys(exercise.setProgress).length > 0 && (() => {
+                                  const completedSets = Object.entries(exercise.setProgress)
+                                    .filter(([_, setData]) => {
+                                      return typeof setData === 'boolean' ? setData : setData?.completed
+                                    })
+                                    .sort(([a], [b]) => parseInt(a) - parseInt(b))
+                                  
+                                  if (completedSets.length === 0) return null
+                                  
+                                  return (
+                                    <div className="mt-2 p-2 bg-ar-gray-900/50 rounded border border-ar-gray-700/30">
+                                      <div className="text-xs text-ar-gray-400 mb-1.5 font-medium">Set Performance:</div>
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {completedSets.map(([setIndex, setData]) => {
+                                          const actualReps = typeof setData === 'object' ? setData?.actualReps : null
+                                          const targetReps = exercise.reps
+                                          
+                                          // Determine color based on performance
+                                          let performanceColor = 'text-red-400 bg-red-500/10 border-red-500/20'
+                                          if (actualReps !== null) {
+                                            if (actualReps >= targetReps) {
+                                              performanceColor = 'text-green-400 bg-green-500/10 border-green-500/20'
+                                            } else if (actualReps >= targetReps * 0.8) {
+                                              performanceColor = 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20'
+                                            } else {
+                                              performanceColor = 'text-orange-400 bg-orange-500/10 border-orange-500/20'
+                                            }
+                                          }
+                                          
+                                          return (
+                                            <span 
+                                              key={setIndex} 
+                                              className={`font-medium text-xs px-2 py-1 rounded border ${performanceColor}`}
+                                            >
+                                              Set {parseInt(setIndex) + 1}: {actualReps !== null ? `${actualReps}/${targetReps}` : '✓'}
+                                            </span>
+                                          )
+                                        })}
+                                      </div>
+                                    </div>
+                                  )
+                                })()}
+                              </div>
+                            )}
+                            
+                            {/* Non-strength exercise info */}
+                            {!(exercise.sets && exercise.reps) && (
+                              <div className="grid grid-cols-3 gap-3 text-xs">
+                                {/* Cardio exercise info */}
+                                {exercise.distance && (
+                                  <div>
+                                    <span className="text-ar-gray-400">Distance: </span>
+                                    <span className="text-red-400 font-medium">{exercise.distance}km</span>
+                                  </div>
+                                )}
+                                {exercise.speed && (
+                                  <div>
+                                    <span className="text-ar-gray-400">Speed: </span>
+                                    <span className="text-red-400 font-medium">{exercise.speed}km/h</span>
+                                  </div>
+                                )}
+                                {exercise.calories && (
+                                  <div>
+                                    <span className="text-ar-gray-400">Calories: </span>
+                                    <span className="text-red-400 font-medium">{exercise.calories}</span>
+                                  </div>
+                                )}
+                                
+                                {/* Time-based exercise info */}
+                                {exercise.restTime && (
+                                  <div>
+                                    <span className="text-ar-gray-400">Rest: </span>
+                                    <span className="text-red-400 font-medium">{exercise.restTime}s</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                             
                             {exercise.notes && (
                               <div className="mt-2 text-ar-gray-300 text-xs">
@@ -243,7 +301,7 @@ export default function WorkoutHistoryBox({ activities, isExpanded, onToggle }) 
                         ))}
                       </div>
                     </div>
-                    );
+                    )
                   })()}
 
                   {/* Completion Time */}

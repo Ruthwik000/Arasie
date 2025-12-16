@@ -243,21 +243,12 @@ export class FirebaseUserService {
     const today = new Date().toISOString().slice(0, 10);
     const planName = workoutSessionData.planName || "Workout Session";
 
-    // Check if workout already exists for today with same plan
-    const existingWorkout = currentHistory.find(workout => 
-      workout.date === today && workout.planName === planName
-    );
-
-    if (existingWorkout) {
-      return { newHistory: currentHistory };
-    }
-
     // Create workout object with real session data - clean undefined values
     const workout = {
       id: Date.now(),
       type: workoutSessionData.type || "split",
       planName: planName,
-      date: today,
+      date: workoutSessionData.date || today,
       duration: workoutSessionData.duration || 30,
       completed: true,
       
@@ -267,7 +258,9 @@ export class FirebaseUserService {
         sets: exercise.completedSets || exercise.sets || 3,
         reps: exercise.completedReps || exercise.reps || 12,
         weight: exercise.actualWeight || exercise.weight || 0,
-        completed: exercise.completed !== false
+        completed: exercise.completed !== false,
+        completedSets: exercise.completedSets || 0,
+        setProgress: exercise.setProgress || {}  // Preserve detailed set progress with actual reps
       })),
       
       // Session summary
@@ -279,6 +272,8 @@ export class FirebaseUserService {
     // Add optional fields only if they have values (not undefined)
     if (workoutSessionData.planId) workout.planId = workoutSessionData.planId;
     if (workoutSessionData.dayId) workout.dayId = workoutSessionData.dayId;
+    if (workoutSessionData.category) workout.category = workoutSessionData.category;
+    if (workoutSessionData.status) workout.status = workoutSessionData.status;
     if (workoutSessionData.startTime) workout.startTime = workoutSessionData.startTime;
     if (workoutSessionData.endTime) workout.endTime = workoutSessionData.endTime;
     if (workoutSessionData.totalVolume) workout.totalVolume = workoutSessionData.totalVolume;

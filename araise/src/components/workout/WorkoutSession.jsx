@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 import { workoutData } from "../../data/workoutData"
 import CameraSelectionModal from "../CameraSelectionModal"
+import RepInputModal from "./RepInputModal"
 import { isMobile } from "../../utils/helpers"
 import { useUserStore } from "../../store/userStore"
 
@@ -25,6 +26,10 @@ export default function WorkoutSession() {
   const [workoutSession, setWorkoutSession] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
   const [showExitConfirmation, setShowExitConfirmation] = useState(false)
+  
+  // Rep input modal state
+  const [showRepModal, setShowRepModal] = useState(false)
+  const [selectedSet, setSelectedSet] = useState(null)
   
   const { 
     startWorkoutSession, 
@@ -125,8 +130,10 @@ export default function WorkoutSession() {
       const savedSets = {}
       currentWorkoutSession.exercises.forEach((exercise, exerciseIndex) => {
         if (exercise.setProgress) {
-          Object.keys(exercise.setProgress).forEach(key => {
-            savedSets[key] = exercise.setProgress[key]
+          Object.keys(exercise.setProgress).forEach(setIndex => {
+            // Reconstruct the full key format: "exerciseIndex-setIndex"
+            const fullKey = `${exerciseIndex}-${setIndex}`
+            savedSets[fullKey] = exercise.setProgress[setIndex]
           })
         }
       })
@@ -146,20 +153,81 @@ export default function WorkoutSession() {
   const exercise = sessionData.exercises[currentExercise]
   const isLastExercise = currentExercise === sessionData.exercises.length - 1
 
-  const handleSetComplete = (exerciseIndex, setIndex) => {
+  // Helper function to check if setProgress value is legacy (boolean) or new (object) format
+  const isLegacyFormat = (value) => {
+    return typeof value === 'boolean'
+  }
+
+  // Helper function to get set details (handles both legacy and new format)
+  const getSetDetails = (exerciseIndex, setIndex) => {
     const key = `${exerciseIndex}-${setIndex}`
+    const value = completedSets[key]
+    
+    if (!value) {
+      return { completed: false, actualReps: null }
+    }
+    
+    // Legacy format (boolean)
+    if (isLegacyFormat(value)) {
+      return { completed: value, actualReps: null }
+    }
+    
+    // New format (object)
+    return value
+  }
+
+  const handleSetClick = (exerciseIndex, setIndex) => {
+    // Enforce sequential set completion
+    // User can only enter reps for a set if all previous sets are completed
+    if (setIndex > 0) {
+      // Check if previous set is completed
+      const previousSetData = completedSets[`${exerciseIndex}-${setIndex - 1}`]
+      const isPreviousCompleted = previousSetData && (previousSetData === true || previousSetData.completed)
+      
+      if (!isPreviousCompleted) {
+        // Show error message or toast (for now, just return)
+        alert(`Please complete Set ${setIndex} first before moving to Set ${setIndex + 1}`)
+        return
+      }
+    }
+    
+    // Open modal for rep input
+    setSelectedSet({ exerciseIndex, setIndex })
+    setShowRepModal(true)
+  }
+
+  const handleRepSave = (actualReps) => {
+    if (!selectedSet) return
+    
+    const { exerciseIndex, setIndex } = selectedSet
+    const key = `${exerciseIndex}-${setIndex}`
+    
+    // Create new set progress with object format
     const newCompletedSets = {
       ...completedSets,
-      [key]: !completedSets[key]
+      [key]: actualReps === null 
+        ? null  // Mark as incomplete if no reps entered
+        : { completed: true, actualReps }
     }
+    
     setCompletedSets(newCompletedSets)
     
     // Calculate completed sets count for this exercise
     const totalSets = parseInt(exercise.sets) || 3
     let completedCount = 0
     for (let i = 0; i < totalSets; i++) {
-      if (newCompletedSets[`${exerciseIndex}-${i}`]) {
+      const setData = newCompletedSets[`${exerciseIndex}-${i}`]
+      if (setData && (setData === true || setData.completed)) {
         completedCount++
+      }
+    }
+    
+    // Filter setProgress to only include sets for this specific exercise
+    const exerciseSetProgress = {}
+    for (let i = 0; i < totalSets; i++) {
+      const key = `${exerciseIndex}-${i}`
+      if (newCompletedSets[key]) {
+        exerciseSetProgress[i] = newCompletedSets[key]
       }
     }
     
@@ -168,11 +236,20 @@ export default function WorkoutSession() {
     updateExerciseInSession(exerciseIndex, {
       completedSets: completedCount,
       completed: isExerciseCompleted,
-      setProgress: newCompletedSets // Save the detailed set progress
+      setProgress: exerciseSetProgress // Save only this exercise's set progress
     })
     
     // Auto-save progress to Firebase
-    saveWorkoutProgress(exerciseIndex, completedCount, isExerciseCompleted, newCompletedSets)
+    saveWorkoutProgress(exerciseIndex, completedCount, isExerciseCompleted, exerciseSetProgress)
+    
+    // Close modal
+    setShowRepModal(false)
+    setSelectedSet(null)
+  }
+
+  const handleRepModalClose = () => {
+    setShowRepModal(false)
+    setSelectedSet(null)
   }
 
   const saveWorkoutProgress = async (exerciseIndex, completedSets, isCompleted, setProgress) => {
@@ -216,7 +293,9 @@ export default function WorkoutSession() {
     const totalSets = parseInt(exercise.sets) || 3
     let completed = 0
     for (let i = 0; i < totalSets; i++) {
-      if (completedSets[`${exerciseIndex}-${i}`]) {
+      const setData = completedSets[`${exerciseIndex}-${i}`]
+      // Handle both legacy (boolean) and new (object) formats
+      if (setData && (setData === true || setData.completed)) {
         completed++
       }
     }
@@ -230,6 +309,47 @@ export default function WorkoutSession() {
 
   const handleNext = async () => {
     if (isLastExercise) {
+      // Save the workout with actual rep data before navigating to complete page
+      if (currentWorkoutSession) {
+        setIsSaving(true)
+        try {
+          // Calculate workout duration
+          const startTime = new Date(currentWorkoutSession.startTime)
+          const endTime = new Date()
+          const duration = Math.round((endTime - startTime) / 60000) // minutes
+          
+          // Create completed workout data with actual rep tracking
+          const completedWorkoutData = {
+            id: currentWorkoutSession.id,
+            planName: currentWorkoutSession.planName,
+            planId: currentWorkoutSession.planId,
+            dayId: currentWorkoutSession.dayId,
+            category: category,
+            type: currentWorkoutSession.type,
+            status: "completed",
+            date: new Date(currentWorkoutSession.startTime).toISOString().slice(0, 10),
+            startTime: currentWorkoutSession.startTime,
+            endTime: endTime.toISOString(),
+            duration: duration,
+            exercises: currentWorkoutSession.exercises.map(ex => ({
+              ...ex,
+              completed: true // Mark all as completed when finishing
+            })),
+            completed: true,
+            totalExercises: currentWorkoutSession.exercises.length,
+            completedExercises: currentWorkoutSession.exercises.length
+          }
+          
+          // Save to Firebase
+          await saveWorkoutSession(completedWorkoutData)
+        } catch (error) {
+          console.error('Error saving completed workout:', error)
+          alert('Failed to save workout. Please try again.')
+        } finally {
+          setIsSaving(false)
+        }
+      }
+      
       const completePath = dayId 
         ? `/workout/${category}/${splitId}/${dayId}/complete`
         : `/workout/${category}/${splitId}/complete`
@@ -240,6 +360,16 @@ export default function WorkoutSession() {
       if (currentWorkoutSession) {
         const completedCount = getCompletedSetsCount(currentExercise)
         const isCompleted = isExerciseComplete(currentExercise)
+        
+        // Filter setProgress for current exercise only
+        const totalSets = parseInt(exercise.sets) || 3
+        const currentExerciseSetProgress = {}
+        for (let i = 0; i < totalSets; i++) {
+          const key = `${currentExercise}-${i}`
+          if (completedSets[key]) {
+            currentExerciseSetProgress[i] = completedSets[key]
+          }
+        }
         
         // Save with the NEXT exercise index so resume works correctly
         setIsSaving(true)
@@ -256,7 +386,7 @@ export default function WorkoutSession() {
               ...ex,
               completed: idx === currentExercise ? isCompleted : ex.completed,
               completedSets: idx === currentExercise ? completedCount : ex.completedSets,
-              setProgress: idx === currentExercise ? completedSets : ex.setProgress
+              setProgress: idx === currentExercise ? currentExerciseSetProgress : ex.setProgress
             })),
             isInProgress: true,
             lastUpdated: new Date().toISOString()
@@ -527,23 +657,43 @@ export default function WorkoutSession() {
         {exercise.sets && (
           <div className="mb-4 md:mb-6">
             <p className="text-sm text-ar-gray mb-3">Track your sets:</p>
-            <div className="flex justify-center gap-3">
+            <div className="flex justify-center gap-3 flex-wrap">
               {Array.from({ length: parseInt(exercise.sets) || 3 }, (_, index) => {
-                const isCompleted = completedSets[`${currentExercise}-${index}`]
+                const setDetails = getSetDetails(currentExercise, index)
+                const isCompleted = setDetails.completed
+                const actualReps = setDetails.actualReps
+                
+                // Check if this set can be clicked (sequential validation)
+                let isClickable = true
+                if (index > 0) {
+                  const previousSetData = completedSets[`${currentExercise}-${index - 1}`]
+                  const isPreviousCompleted = previousSetData && (previousSetData === true || previousSetData.completed)
+                  isClickable = isPreviousCompleted
+                }
+                
                 return (
-                  <motion.button
-                    key={index}
-                    onClick={() => handleSetComplete(currentExercise, index)}
-                    className={`w-12 h-12 rounded-full border-2 transition-all duration-300 flex items-center justify-center font-bold ${
-                      isCompleted
-                        ? `${colors.bg} border-transparent text-white shadow-lg`
-                        : `border-ar-gray-600 text-ar-gray-400 hover:border-ar-blue/50 hover:text-ar-blue`
-                    }`}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    {index + 1}
-                  </motion.button>
+                  <div key={index} className="flex flex-col items-center gap-1">
+                    <motion.button
+                      onClick={() => handleSetClick(currentExercise, index)}
+                      disabled={!isClickable && !isCompleted}
+                      className={`w-12 h-12 rounded-full border-2 transition-all duration-300 flex items-center justify-center font-bold ${
+                        isCompleted
+                          ? `${colors.bg} border-transparent text-white shadow-lg`
+                          : isClickable
+                          ? `border-ar-gray-600 text-ar-gray-400 hover:border-ar-blue/50 hover:text-ar-blue cursor-pointer`
+                          : `border-ar-gray-800 text-ar-gray-600 cursor-not-allowed opacity-50`
+                      }`}
+                      whileHover={isClickable || isCompleted ? { scale: 1.05 } : {}}
+                      whileTap={isClickable || isCompleted ? { scale: 0.95 } : {}}
+                    >
+                      {index + 1}
+                    </motion.button>
+                    {isCompleted && actualReps !== null && (
+                      <span className={`text-xs ${colors.text} font-medium`}>
+                        {actualReps}/{exercise.reps}
+                      </span>
+                    )}
+                  </div>
                 )
               })}
             </div>
@@ -592,6 +742,17 @@ export default function WorkoutSession() {
         isOpen={showCameraModal}
         onClose={handleCameraModalClose}
         onSelect={handleCameraSelection}
+      />
+
+      {/* Rep Input Modal */}
+      <RepInputModal
+        isOpen={showRepModal}
+        onClose={handleRepModalClose}
+        onSave={handleRepSave}
+        targetReps={exercise?.reps || 0}
+        currentReps={selectedSet ? getSetDetails(selectedSet.exerciseIndex, selectedSet.setIndex).actualReps : null}
+        setNumber={selectedSet ? selectedSet.setIndex + 1 : 0}
+        exerciseName={exercise?.exerciseName || ''}
       />
     </div>
   )
