@@ -2,6 +2,8 @@ import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Wind, Music, BookOpen, Sun } from "lucide-react"
 import { useUserStore } from "../store/userStore"
+import { useImagePreloader } from "../hooks/useProgressiveImage"
+import { OptimizedBackgroundImage } from "../components/OptimizedImage"
 import Chat from "../components/mental-health/chat/Chat"
 import GuidedBreathing from "../components/mental-health/GuidedBreathing"
 import Journaling from "../components/mental-health/Journaling"
@@ -59,6 +61,13 @@ export default function MentalHealth() {
   const [moodMessage, setMoodMessage] = useState('')
 
   const { name, updateMentalHealthProgress, setChatOpen, logMentalHealthEntry, setMentalHealthSubSection } = useUserStore()
+
+  // Preload all images for faster loading
+  const imagesToPreload = [
+    '/images/mental-health/chat.jpg',
+    ...wellnessTools.map(tool => tool.backgroundImage)
+  ]
+  useImagePreloader(imagesToPreload)
 
   // Handle UI state when activeSection changes
   useEffect(() => {
@@ -161,23 +170,14 @@ export default function MentalHealth() {
         transition={{ delay: 0.2 }}
         className="space-y-4"
       >
-        <div
-          className="relative overflow-hidden rounded-2xl sm:rounded-3xl group cursor-pointer h-80 sm:h-96"
+        <OptimizedBackgroundImage
+          src="/images/mental-health/chat.jpg"
+          className="overflow-hidden rounded-2xl sm:rounded-3xl group cursor-pointer h-80 sm:h-96"
           onClick={() => setActiveSection('chat')}
+          overlay="bg-black/40 group-hover:bg-black/30 transition-all duration-500"
+          fallbackGradient="from-purple-900 to-blue-900"
         >
-          {/* Background Image */}
-          <div
-            className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-transform duration-500 group-hover:scale-105"
-            style={{
-              backgroundImage: "url('/images/mental-health/chat.jpg')"
-            }}
-          ></div>
-
-          {/* Dark Overlay */}
-          <div className="absolute inset-0 bg-black/40 group-hover:bg-black/30 transition-all duration-500"></div>
-
-          {/* Content */}
-          <div className="relative z-10 p-6 sm:p-12 text-center h-full flex flex-col justify-center">
+          <div className="relative z-10 p-6 sm:p-12 text-center h-full flex flex-col justify-center group-hover:scale-105 transition-transform duration-500">
             {/* Title */}
             <h2 className="text-2xl sm:text-4xl font-hagrid font-light text-white mb-4 sm:mb-6 drop-shadow-lg">
               Wellness Companion
@@ -194,7 +194,7 @@ export default function MentalHealth() {
               Open Chat
             </button>
           </div>
-        </div>
+        </OptimizedBackgroundImage>
 
         {/* Features Row - Horizontal line */}
         <div className="flex items-center justify-center gap-2 sm:gap-6 text-ar-gray-400 flex-wrap px-4">
@@ -224,26 +224,19 @@ export default function MentalHealth() {
           {wellnessTools.map((tool) => {
             const Icon = tool.icon
             return (
-              <motion.button
+              <OptimizedBackgroundImage
                 key={tool.id}
+                src={tool.backgroundImage}
+                className="overflow-hidden rounded-2xl sm:rounded-3xl group cursor-pointer h-32 sm:h-40"
                 onClick={() => setActiveSection(tool.id)}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className="relative overflow-hidden rounded-2xl sm:rounded-3xl group cursor-pointer h-32 sm:h-40"
+                overlay="bg-black/40 group-hover:bg-black/30 transition-all duration-500"
+                fallbackGradient={tool.gradient}
               >
-                {/* Background Image */}
-                <div 
-                  className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-transform duration-500 group-hover:scale-105"
-                  style={{
-                    backgroundImage: `url('${tool.backgroundImage}')`
-                  }}
-                ></div>
-                
-                {/* Dark Overlay */}
-                <div className="absolute inset-0 bg-black/40 group-hover:bg-black/30 transition-all duration-500"></div>
-                
-                {/* Content */}
-                <div className="relative z-10 p-3 sm:p-4 h-full flex flex-col justify-between text-left">
+                <motion.div
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="relative z-10 p-3 sm:p-4 h-full flex flex-col justify-between text-left group-hover:scale-105 transition-transform duration-500"
+                >
                   <div className="flex items-center gap-2 mb-1 sm:mb-2">
                     <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white/20 backdrop-blur-sm rounded-lg sm:rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
                       <Icon size={16} className="text-white sm:w-5 sm:h-5" />
@@ -258,8 +251,8 @@ export default function MentalHealth() {
                       {tool.description}
                     </p>
                   </div>
-                </div>
-              </motion.button>
+                </motion.div>
+              </OptimizedBackgroundImage>
             )
           })}
         </div>

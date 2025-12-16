@@ -200,12 +200,15 @@ export default function VoiceModal({
     const [audioLevel, setAudioLevel] = useState(0)
     const [isWaitingForResponse, setIsWaitingForResponse] = useState(false)
     const [pendingResponse, setPendingResponse] = useState(null)
+    const [responseQueue, setResponseQueue] = useState([])
 
     const recognitionRef = useRef(null)
     const synthRef = useRef(null)
     const audioContextRef = useRef(null)
     const analyserRef = useRef(null)
     const microphoneRef = useRef(null)
+    const mediaStreamRef = useRef(null) // Store the media stream to stop it later
+    const instanceIdRef = useRef(`voice-modal-${Date.now()}`)
 
     // Initialize speech recognition and synthesis
     useEffect(() => {
@@ -228,9 +231,7 @@ export default function VoiceModal({
 
             recognitionRef.current.onend = () => {
                 setIsListening(false)
-                if (currentMessage.trim()) {
-                    onMessageSend(currentMessage)
-                }
+                // Don't auto-send on end - only send when user explicitly clicks Done
             }
 
             recognitionRef.current.onerror = (event) => {
@@ -242,7 +243,9 @@ export default function VoiceModal({
                         onClose()
                         break
                     case 'network':
-                        // Silently handle network errors
+                        if (!navigator.onLine) {
+                            alert('You appear to be offline. Please check your internet connection.')
+                        }
                         break
                     case 'no-speech':
                         // Don't show error for no speech, this is normal
@@ -264,10 +267,25 @@ export default function VoiceModal({
 
         return () => {
             if (recognitionRef.current) {
-                recognitionRef.current.stop()
+                try {
+                    recognitionRef.current.stop()
+                } catch (error) {
+                    console.warn('Error stopping recognition:', error)
+                }
             }
-            if (synthRef.current) {
-                synthRef.current.cancel()
+            if (synthRef.current && synthRef.current.speaking) {
+                try {
+                    synthRef.current.cancel()
+                } catch (error) {
+                    console.warn('Error cancelling speech:', error)
+                }
+            }
+            // Stop microphone stream on unmount
+            if (mediaStreamRef.current) {
+                mediaStreamRef.current.getTracks().forEach(track => {
+                    track.stop()
+                })
+                mediaStreamRef.current = null
             }
         }
     }, [])
@@ -284,17 +302,21 @@ export default function VoiceModal({
                 if (recognitionRef.current) {
                     recognitionRef.current.stop()
                 }
-                if (synthRef.current) {
+                if (synthRef.current && synthRef.current.speaking) {
                     synthRef.current.cancel()
                 }
-                if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-                    audioContextRef.current.close()
+                // Stop microphone stream
+                stopMicrophoneStream()
+                // Close audio context
+                if (audioContextRef.current && audioContextRef.current.state !== 'closed' && audioContextRef.current.state !== 'closing') {
+                    audioContextRef.current.close().catch(err => console.warn('AudioContext close error:', err))
                 }
             } catch (error) {
                 console.warn('Cleanup error:', error)
             }
             setIsListening(false)
             setIsSpeaking(false)
+            setIsWaitingForResponse(false)
         }
     }, [isOpen])
 
@@ -307,18 +329,32 @@ export default function VoiceModal({
                 return
             }
 
+            // Request microphone access with mobile-friendly constraints
             const stream = await navigator.mediaDevices.getUserMedia({
                 audio: {
                     echoCancellation: true,
                     noiseSuppression: true,
-                    autoGainControl: true
+                    autoGainControl: true,
+                    // Mobile-friendly constraints
+                    sampleRate: 44100,
+                    channelCount: 1
                 }
             })
 
+            // Store the stream so we can stop it later
+            mediaStreamRef.current = stream
+
             // Only create new AudioContext if one doesn't exist or is closed
             if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-                audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)()
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext
+                audioContextRef.current = new AudioContextClass()
             }
+
+            // Resume audio context if suspended (common on mobile)
+            if (audioContextRef.current.state === 'suspended') {
+                await audioContextRef.current.resume()
+            }
+
             analyserRef.current = audioContextRef.current.createAnalyser()
             microphoneRef.current = audioContextRef.current.createMediaStreamSource(stream)
 
@@ -342,6 +378,18 @@ export default function VoiceModal({
             updateAudioLevel()
         } catch (error) {
             console.error('Error accessing microphone:', error)
+            // Re-throw to be handled by caller
+            throw error
+        }
+    }
+
+    // Function to stop microphone stream
+    const stopMicrophoneStream = () => {
+        if (mediaStreamRef.current) {
+            mediaStreamRef.current.getTracks().forEach(track => {
+                track.stop()
+            })
+            mediaStreamRef.current = null
         }
     }
 
@@ -351,7 +399,9 @@ export default function VoiceModal({
 
         try {
             // Cancel any ongoing speech
-            synthRef.current.cancel()
+            if (synthRef.current.speaking) {
+                synthRef.current.cancel()
+            }
 
             const utterance = new SpeechSynthesisUtterance(text)
             utterance.rate = 0.9
@@ -365,12 +415,21 @@ export default function VoiceModal({
             
             utterance.onend = () => {
                 setIsSpeaking(false)
-                // After AI finishes speaking, automatically start listening again
-                setTimeout(() => {
-                    if (isOpen) {
-                        startListening()
+                // Process next response in queue if any
+                setResponseQueue(prev => {
+                    if (prev.length > 0) {
+                        const [nextResponse, ...rest] = prev
+                        setTimeout(() => speakText(nextResponse), 500)
+                        return rest
                     }
-                }, 500)
+                    // After AI finishes speaking, automatically start listening again
+                    setTimeout(() => {
+                        if (isOpen) {
+                            startListening()
+                        }
+                    }, 500)
+                    return []
+                })
             }
             
             utterance.onerror = () => {
@@ -386,10 +445,14 @@ export default function VoiceModal({
         }
     }
 
-    // Handle incoming AI response
+    // Handle incoming AI response with queue
     useEffect(() => {
         if (pendingResponse && isOpen && !isListening && !isSpeaking) {
             speakText(pendingResponse)
+            setPendingResponse(null)
+        } else if (pendingResponse && (isListening || isSpeaking)) {
+            // Add to queue if currently busy
+            setResponseQueue(prev => [...prev, pendingResponse])
             setPendingResponse(null)
         }
     }, [pendingResponse, isOpen, isListening, isSpeaking])
@@ -403,6 +466,8 @@ export default function VoiceModal({
             }
             setIsListening(false)
         }
+        // Stop the microphone stream
+        stopMicrophoneStream()
     }
 
     const startListening = async () => {
@@ -413,54 +478,112 @@ export default function VoiceModal({
 
         // Check internet connection
         if (!navigator.onLine) {
+            alert('You appear to be offline. Voice chat requires an internet connection.')
             return
         }
 
-        setIsListening(true)
-        await setupAudioVisualization()
+        // Check if microphone permission is supported
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            alert('Microphone access is not supported on this device.')
+            return
+        }
 
-        setTimeout(() => {
-            if (recognitionRef.current) {
-                try {
-                    recognitionRef.current.start()
-                } catch (error) {
-                    console.warn('Failed to start speech recognition:', error)
-                    setIsListening(false)
+        try {
+            // Request microphone permission first (especially important for mobile)
+            setIsListening(true)
+            await setupAudioVisualization()
+
+            // Small delay to ensure audio context is ready
+            setTimeout(() => {
+                if (recognitionRef.current) {
+                    try {
+                        recognitionRef.current.start()
+                    } catch (error) {
+                        console.warn('Failed to start speech recognition:', error)
+                        setIsListening(false)
+                        stopMicrophoneStream()
+                        
+                        // Provide user-friendly error message
+                        if (error.message && error.message.includes('already started')) {
+                            // Recognition already running, ignore
+                            return
+                        }
+                        alert('Unable to start voice recognition. Please try again.')
+                    }
                 }
-            }
-        }, 500)
-    }
-
-    // Expose speakText function to parent - use pending response pattern
-    useEffect(() => {
-        if (isOpen) {
-            window.voiceModalSpeakText = (text) => {
-                setPendingResponse(text)
+            }, 300)
+        } catch (error) {
+            console.error('Error starting listening:', error)
+            setIsListening(false)
+            stopMicrophoneStream()
+            
+            // Handle specific permission errors
+            if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                alert('Microphone permission denied. Please allow microphone access in your browser settings and try again.')
+            } else if (error.name === 'NotFoundError') {
+                alert('No microphone found. Please connect a microphone and try again.')
+            } else {
+                alert('Unable to access microphone. Please check your device settings and try again.')
             }
         }
+    }
+
+    // Expose speakText function to parent - use pending response pattern with instance tracking
+    useEffect(() => {
+        if (isOpen) {
+            const instanceId = instanceIdRef.current
+            if (!window.voiceModalInstances) {
+                window.voiceModalInstances = {}
+            }
+            window.voiceModalInstances[instanceId] = (text) => {
+                setPendingResponse(text)
+            }
+            // Set the latest instance as the active one
+            window.voiceModalSpeakText = window.voiceModalInstances[instanceId]
+        }
         return () => {
-            if (window.voiceModalSpeakText) {
+            const instanceId = instanceIdRef.current
+            if (window.voiceModalInstances && window.voiceModalInstances[instanceId]) {
+                delete window.voiceModalInstances[instanceId]
+            }
+            // Clean up global function if this was the active instance
+            if (window.voiceModalSpeakText === window.voiceModalInstances?.[instanceId]) {
                 delete window.voiceModalSpeakText
             }
         }
     }, [isOpen])
 
-    // Prevent body scroll when modal is open
+    // Prevent body scroll when modal is open (with iOS fix)
     useEffect(() => {
         if (isOpen) {
+            // Store current scroll position
+            const scrollY = window.scrollY
+            
+            // Apply styles to prevent scroll
             document.body.style.overflow = 'hidden'
             document.body.style.position = 'fixed'
+            document.body.style.top = `-${scrollY}px`
             document.body.style.width = '100%'
-        } else {
-            document.body.style.overflow = ''
-            document.body.style.position = ''
-            document.body.style.width = ''
-        }
-        
-        return () => {
-            document.body.style.overflow = ''
-            document.body.style.position = ''
-            document.body.style.width = ''
+            document.body.style.height = '100vh'
+            
+            // Prevent iOS bounce/rubber-band effect
+            document.body.style.touchAction = 'none'
+            
+            return () => {
+                // Restore scroll position
+                const scrollY = document.body.style.top
+                document.body.style.overflow = ''
+                document.body.style.position = ''
+                document.body.style.top = ''
+                document.body.style.width = ''
+                document.body.style.height = ''
+                document.body.style.touchAction = ''
+                
+                // Restore scroll position
+                if (scrollY) {
+                    window.scrollTo(0, parseInt(scrollY || '0') * -1)
+                }
+            }
         }
     }, [isOpen])
 
@@ -477,7 +600,11 @@ export default function VoiceModal({
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     className="fixed inset-0 bg-black z-[60] flex items-center justify-center"
-                    style={{ isolation: 'isolate' }}
+                    style={{ 
+                        isolation: 'isolate',
+                        touchAction: 'none',
+                        WebkitOverflowScrolling: 'touch'
+                    }}
                 >
                     {/* Enhanced Background */}
                     <div className="absolute inset-0 bg-gradient-to-b from-gray-900 via-black to-gray-900" />
