@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import {
@@ -11,12 +11,39 @@ import {
   Camera
 } from "lucide-react"
 import { workoutData } from "../../data/workoutData"
+import { useUserStore } from "../../store/userStore"
 
 // Split Detail Component
 export default function SplitDetail() {
   const { category, splitId } = useParams()
   const navigate = useNavigate()
   const [selectedDay, setSelectedDay] = useState(null)
+  const [savedProgress, setSavedProgress] = useState(null)
+  const { loadWorkoutProgress } = useUserStore()
+
+  // Check for saved workout progress on mount
+  useEffect(() => {
+    const checkSavedProgress = async () => {
+      const progress = await loadWorkoutProgress(splitId)
+      if (progress) {
+        setSavedProgress(progress)
+      }
+    }
+    checkSavedProgress()
+  }, [splitId, loadWorkoutProgress])
+
+  const handleStartNewWorkout = async (dayId = null) => {
+    // Clear saved progress and start fresh
+    const { clearWorkoutProgress } = useUserStore.getState()
+    await clearWorkoutProgress()
+    setSavedProgress(null)
+    
+    if (dayId) {
+      navigate(`/workout/${category}/${splitId}/${dayId}/session`)
+    } else {
+      navigate(`/workout/${category}/${splitId}/session`)
+    }
+  }
 
   const getSplitData = () => {
     switch (category) {
@@ -107,7 +134,7 @@ export default function SplitDetail() {
           </div>
 
           <motion.button
-            onClick={() => navigate(`/workout/${category}/${splitId}/session`)}
+            onClick={handleStartNewWorkout}
             className="w-full bg-ar-green hover:bg-ar-green/80 text-white font-bold py-4 rounded-xl transition-all duration-300 hover:shadow-glow-green text-lg"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -159,7 +186,7 @@ export default function SplitDetail() {
           </div>
 
           <motion.button
-            onClick={() => navigate(`/workout/${category}/${splitId}/session`)}
+            onClick={handleStartNewWorkout}
             className="w-full bg-ar-green hover:bg-ar-green/80 text-white font-bold py-4 rounded-xl transition-all duration-300 hover:shadow-glow-green text-lg"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -251,7 +278,7 @@ export default function SplitDetail() {
                 </div>
 
                 <motion.button
-                  onClick={() => navigate(`/workout/${category}/${splitId}/${selectedDay}/session`)}
+                  onClick={() => handleStartNewWorkout(selectedDay)}
                   className="w-full bg-ar-blue hover:bg-ar-blue/80 text-white font-bold py-4 rounded-xl transition-all duration-300 hover:shadow-glow-blue text-lg"
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}

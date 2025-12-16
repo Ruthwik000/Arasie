@@ -165,6 +165,8 @@ function WorkoutComplete() {
             planName: completionData.planName,
             planId: completionData.planId || splitId,
             dayId: completionData.dayId || dayId,
+            category: category,
+            status: "completed", // Mark as completed
             date: new Date().toISOString().slice(0, 10),
             duration: completionData.duration || 45,
             startTime: new Date().toISOString(),
@@ -1212,6 +1214,8 @@ function CustomWorkoutComplete() {
               planName: foundWorkout.name,
               planId: `custom-${foundWorkout.id}`,
               dayId: null,
+              category: "custom",
+              status: "completed", // Mark as completed
               date: new Date().toISOString().slice(0, 10),
               duration: 45, // Default duration for custom workouts
               startTime: new Date().toISOString(),

@@ -1,11 +1,8 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
 import { FirebaseUserService } from '../services/FirebaseUserService'
 import { useXpStore } from './xpStore'
 
-export const useUserStore = create(
-  persist(
-    (set, get) => ({
+export const useUserStore = create((set, get) => ({
       // User profile & authentication
       user: null, // Firebase user object
       name: null, // Will be set when authenticated
@@ -370,9 +367,15 @@ export const useUserStore = create(
             state.workoutHistory
           );
 
+          // Clear the in-progress workout since it's now completed
+          if (state.firebaseService.clearWorkoutProgress) {
+            await state.firebaseService.clearWorkoutProgress();
+          }
+
           set({
             workoutCompleted: true,
-            workoutHistory: newHistory
+            workoutHistory: newHistory,
+            currentWorkoutSession: null // Clear current session
           });
         } catch (error) {
           // Error saving workout session
@@ -397,6 +400,20 @@ export const useUserStore = create(
         } catch (error) {
           console.error('Error loading workout progress:', error);
           return null;
+        }
+      },
+
+      // Clear workout progress from Firestore
+      clearWorkoutProgress: async () => {
+        const state = get();
+        if (!state.firebaseService || !state.firebaseService.clearWorkoutProgress) {
+          return;
+        }
+
+        try {
+          await state.firebaseService.clearWorkoutProgress();
+        } catch (error) {
+          console.error('Error clearing workout progress:', error);
         }
       },
 
@@ -476,6 +493,9 @@ export const useUserStore = create(
         };
 
         await state.saveWorkoutSession(sessionData);
+
+        // Clear workout progress from Firestore
+        await state.clearWorkoutProgress();
 
         // Clear session
         set({
@@ -1269,17 +1289,6 @@ export const useUserStore = create(
           console.error('Error logging journal activity:', error);
         }
       },
-    }),
-    {
-      name: 'araise-user-store',
-      // Only persist minimal UI state - Firebase handles all data
-      partialize: (state) => ({
-        isChatOpen: state.isChatOpen,
-        mentalHealthSubSection: state.mentalHealthSubSection,
-        focusSubSection: state.focusSubSection
-      }),
-    }
-  )
-)
+    }))
 
 

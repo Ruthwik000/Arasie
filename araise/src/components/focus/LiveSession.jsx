@@ -49,40 +49,11 @@ export default function LiveSession({
 
   const [sessionStructure] = useState(initializeSession())
   
-  // Generate a consistent session ID for persistence (without Date.now() so it's the same across reloads)
-  const sessionId = `focus-session-${sessionData.name}-${sessionData.duration}-${sessionData.breakType || 'none'}`
-  
-  // Initialize session with persistence
-  const initializeSessionState = () => {
-    const savedSession = localStorage.getItem(sessionId)
-    if (savedSession) {
-      try {
-        const parsed = JSON.parse(savedSession)
-        return {
-          currentPhaseIndex: parsed.currentPhaseIndex || 0,
-          timeRemaining: parsed.timeRemaining || sessionStructure.phases[0]?.duration || 0,
-          totalFocusTime: parsed.totalFocusTime || 0,
-          timeSpentInCurrentPhase: parsed.timeSpentInCurrentPhase || 0
-        }
-      } catch (error) {
-        console.error('Error parsing saved session:', error)
-      }
-    }
-    
-    return {
-      currentPhaseIndex: 0,
-      timeRemaining: sessionStructure.phases[0]?.duration || 0,
-      totalFocusTime: 0,
-      timeSpentInCurrentPhase: 0
-    }
-  }
-
-  const initialState = initializeSessionState()
-  const [currentPhaseIndex, setCurrentPhaseIndex] = useState(initialState.currentPhaseIndex)
-  const [timeRemaining, setTimeRemaining] = useState(initialState.timeRemaining)
+  const [currentPhaseIndex, setCurrentPhaseIndex] = useState(0)
+  const [timeRemaining, setTimeRemaining] = useState(sessionStructure.phases[0]?.duration || 0)
   const [isPaused, setIsPaused] = useState(false)
-  const [totalFocusTime, setTotalFocusTime] = useState(initialState.totalFocusTime)
-  const [timeSpentInCurrentPhase, setTimeSpentInCurrentPhase] = useState(initialState.timeSpentInCurrentPhase)
+  const [totalFocusTime, setTotalFocusTime] = useState(0)
+  const [timeSpentInCurrentPhase, setTimeSpentInCurrentPhase] = useState(0)
 
   const currentPhase = sessionStructure.phases[currentPhaseIndex]
   const isBreak = currentPhase?.type === 'break'
@@ -90,34 +61,6 @@ export default function LiveSession({
 
   // Debug: Log session data to see what's being passed
   console.log('LiveSession sessionData:', sessionData)
-
-  // Save session state to localStorage
-  const saveSessionState = () => {
-    const sessionState = {
-      currentPhaseIndex,
-      timeRemaining,
-      totalFocusTime,
-      timeSpentInCurrentPhase,
-      taskId: sessionData.taskId, // Include taskId for real-time progress tracking
-      lastSaved: Date.now()
-    }
-    localStorage.setItem(sessionId, JSON.stringify(sessionState))
-  }
-
-  // Save state whenever it changes
-  useEffect(() => {
-    saveSessionState()
-  }, [currentPhaseIndex, timeRemaining, totalFocusTime, timeSpentInCurrentPhase])
-
-  // Clear saved session when component unmounts or session completes
-  useEffect(() => {
-    return () => {
-      // Only clear if session is actually complete, not just paused
-      if (timeRemaining === 0 && isLastPhase) {
-        localStorage.removeItem(sessionId)
-      }
-    }
-  }, [sessionId, timeRemaining, isLastPhase])
 
   // Calculate overall progress
   const calculateOverallProgress = () => {
@@ -189,9 +132,6 @@ export default function LiveSession({
     }
 
     if (isLastPhase) {
-      // Clear saved session state since session is complete
-      localStorage.removeItem(sessionId)
-      
       // Session completely finished
       const focusMinutes = sessionStructure.phases
         .filter(phase => phase.type === 'focus')
@@ -250,9 +190,6 @@ export default function LiveSession({
   }
 
   const handleEnd = () => {
-    // Clear saved session state
-    localStorage.removeItem(sessionId)
-    
     // Calculate total time spent across all focus phases
     let totalTimeSpentMinutes = 0
     
