@@ -10,28 +10,28 @@ const sounds = [
     id: 'rain', 
     name: 'Rain', 
     description: 'Calming rainfall sounds for deep relaxation',
-    image: '/images/mental-health/SoundHealing/rain.jpg',
+    image: '/images/mental-health/SoundHealing/rain.webp',
     audioSrc: '/sounds/mental-health/sound healing/Rain.mp3'
   },
   { 
     id: 'ocean', 
     name: 'Ocean Waves', 
     description: 'Soothing ocean waves for peaceful meditation',
-    image: '/images/mental-health/SoundHealing/ocean.jpg',
+    image: '/images/mental-health/SoundHealing/ocean.webp',
     audioSrc: '/sounds/mental-health/sound healing/Ocean.mp3'
   },
   { 
     id: 'forest', 
     name: 'Forest', 
     description: 'Natural forest ambience for stress relief',
-    image: '/images/mental-health/SoundHealing/Forest.jpg',
+    image: '/images/mental-health/SoundHealing/Forest.webp',
     audioSrc: '/sounds/mental-health/sound healing/forest.mp3'
   },
   { 
     id: '40hz', 
     name: '40hz', 
     description: 'Gamma wave frequency for enhanced focus',
-    image: '/images/mental-health/SoundHealing/40hz.jpg',
+    image: '/images/mental-health/SoundHealing/40hz.webp',
     audioSrc: '/sounds/mental-health/sound healing/40hz.mp3'
   },
 ]

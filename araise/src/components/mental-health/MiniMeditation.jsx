@@ -12,7 +12,7 @@ const meditations = [
     name: 'Body Scan', 
     description: 'Mindful body awareness for deep relaxation',
     duration: '10 min',
-    image: './images/mental-health/mini meditation/bodyscan.jpeg',
+    image: './images/mental-health/mini meditation/bodyscan.webp',
     audioSrc: '/sounds/mental-health/mediation/bodyscan.mp3'
   },
   { 
@@ -20,7 +20,7 @@ const meditations = [
     name: 'Mantra Meditation', 
     description: 'Sacred sounds for inner peace and focus',
     duration: '8 min',
-    image: './images/mental-health/mini meditation/mantra-meditation.jpg',
+    image: './images/mental-health/mini meditation/mantra-meditation.webp',
     audioSrc: '/sounds/mental-health/mediation/mantra-meditation.mp3'
   },
   { 
@@ -28,7 +28,7 @@ const meditations = [
     name: 'Mindfulness', 
     description: 'Present moment awareness practice',
     duration: '12 min',
-    image: './images/mental-health/mini meditation/mindfulness.jpg',
+    image: './images/mental-health/mini meditation/mindfulness.webp',
     audioSrc: '/sounds/mental-health/mediation/mindfulness.mp3'
   },
   { 
@@ -36,7 +36,7 @@ const meditations = [
     name: 'Self Love', 
     description: 'Compassionate meditation for self-acceptance',
     duration: '15 min',
-    image: './images/mental-health/mini meditation/selflove.jpg',
+    image: './images/mental-health/mini meditation/selflove.webp',
     audioSrc: '/sounds/mental-health/mediation/selflove.mp3'
   },
 ]

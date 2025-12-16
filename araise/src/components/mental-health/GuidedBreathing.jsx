@@ -21,7 +21,7 @@ export default function GuidedBreathing({ onBack }) {
       cycles: 5,
       color: '#3b82f6',
       gradient: 'from-blue-600 to-blue-800',
-      backgroundImage: '/images/mental-health/GuidedBreathing/box breathing.jpg',
+      backgroundImage: '/images/mental-health/GuidedBreathing/box breathing.webp',
       steps: [
         { name: 'Inhale', duration: 4000, instruction: 'Breathe in slowly for 4 seconds' },
         { name: 'Hold', duration: 4000, instruction: 'Hold your breath for 4 seconds' },
@@ -38,7 +38,7 @@ export default function GuidedBreathing({ onBack }) {
       cycles: 4,
       color: '#9333ea',
       gradient: 'from-purple-600 to-purple-800',
-      backgroundImage: '/images/mental-health/GuidedBreathing/4-7-8 Breathing.jpg',
+      backgroundImage: '/images/mental-health/GuidedBreathing/4-7-8 Breathing.webp',
       steps: [
         { name: 'Inhale', duration: 4000, instruction: 'Breathe in through your nose for 4 seconds' },
         { name: 'Hold', duration: 7000, instruction: 'Hold your breath gently for 7 seconds' },
@@ -54,7 +54,7 @@ export default function GuidedBreathing({ onBack }) {
       cycles: 6,
       color: '#14b8a6',
       gradient: 'from-teal-600 to-teal-800',
-      backgroundImage: '/images/mental-health/GuidedBreathing/Alternate Nostril Breathing.jpg',
+      backgroundImage: '/images/mental-health/GuidedBreathing/Alternate Nostril Breathing.webp',
       steps: [
         { name: 'Inhale Left', duration: 4000, instruction: 'Close right nostril, inhale through left for 4 seconds' },
         { name: 'Hold', duration: 4000, instruction: 'Close both nostrils, hold for 4 seconds' },
@@ -70,7 +70,7 @@ export default function GuidedBreathing({ onBack }) {
       cycles: 8,
       color: '#22c55e',
       gradient: 'from-green-600 to-green-800',
-      backgroundImage: '/images/mental-health/GuidedBreathing/Deep Focus Breathing.jpg',
+      backgroundImage: '/images/mental-health/GuidedBreathing/Deep Focus Breathing.webp',
       steps: [
         { name: 'Inhale', duration: 5000, instruction: 'Breathe in deeply for 5 seconds' },
         { name: 'Exhale', duration: 5000, instruction: 'Breathe out slowly for 5 seconds' }
@@ -85,7 +85,7 @@ export default function GuidedBreathing({ onBack }) {
       cycles: 15,
       color: '#f97316',
       gradient: 'from-orange-600 to-orange-800',
-      backgroundImage: '/images/mental-health/GuidedBreathing/Resonance Breathing.jpg',
+      backgroundImage: '/images/mental-health/GuidedBreathing/Resonance Breathing.webp',
       steps: [
         { name: 'Inhale', duration: 5500, instruction: 'Breathe in gently for 5.5 seconds' },
         { name: 'Exhale', duration: 5500, instruction: 'Breathe out smoothly for 5.5 seconds' }
@@ -100,7 +100,7 @@ export default function GuidedBreathing({ onBack }) {
       cycles: 12,
       color: '#6366f1',
       gradient: 'from-indigo-600 to-indigo-800',
-      backgroundImage: '/images/mental-health/GuidedBreathing/Belly Breathing.jpg',
+      backgroundImage: '/images/mental-health/GuidedBreathing/Belly Breathing.webp',
       steps: [
         { name: 'Inhale', duration: 4000, instruction: 'Breathe into your belly for 4 seconds' },
         { name: 'Exhale', duration: 6000, instruction: 'Slowly exhale from your belly for 6 seconds' }

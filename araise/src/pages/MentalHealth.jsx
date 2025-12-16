@@ -26,7 +26,7 @@ const wellnessTools = [
     title: 'Guided Breathing',
     description: 'Animated inhale/exhale exercises',
     icon: Wind,
-    backgroundImage: '/images/mental-health/GuidedBreathing.jpg',
+    backgroundImage: '/images/mental-health/GuidedBreathing.webp',
     gradient: 'from-blue-600/80 to-cyan-600/80'
   },
   {
@@ -34,7 +34,7 @@ const wellnessTools = [
     title: 'Journaling',
     description: 'AI reflective prompts & writing',
     icon: BookOpen,
-    backgroundImage: '/images/mental-health/Journaling.jpg',
+    backgroundImage: '/images/mental-health/Journaling.webp',
     gradient: 'from-purple-600/80 to-pink-600/80'
   },
   {
@@ -42,7 +42,7 @@ const wellnessTools = [
     title: 'Sound Healing',
     description: 'Nature sounds & calm music',
     icon: Music,
-    backgroundImage: '/images/mental-health/SoundHealing.jpg',
+    backgroundImage: '/images/mental-health/SoundHealing.webp',
     gradient: 'from-green-600/80 to-emerald-600/80'
   },
   {
@@ -50,7 +50,7 @@ const wellnessTools = [
     title: 'Mini Meditation',
     description: 'Short sessions (2-5 mins)',
     icon: Sun,
-    backgroundImage: '/images/mental-health/Meditation.jpg',
+    backgroundImage: '/images/mental-health/Meditation.webp',
     gradient: 'from-orange-600/80 to-amber-600/80'
   },
 ]
@@ -64,7 +64,7 @@ export default function MentalHealth() {
 
   // Preload all images for faster loading
   const imagesToPreload = [
-    '/images/mental-health/chat.jpg',
+    '/images/mental-health/chat.webp',
     ...wellnessTools.map(tool => tool.backgroundImage)
   ]
   useImagePreloader(imagesToPreload)
@@ -171,7 +171,7 @@ export default function MentalHealth() {
         className="space-y-4"
       >
         <OptimizedBackgroundImage
-          src="/images/mental-health/chat.jpg"
+          src="/images/mental-health/chat.webp"
           className="overflow-hidden rounded-2xl sm:rounded-3xl group cursor-pointer h-80 sm:h-96"
           onClick={() => setActiveSection('chat')}
           overlay="bg-black/40 group-hover:bg-black/30 transition-all duration-500"
