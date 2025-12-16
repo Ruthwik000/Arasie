@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Send, Mic, ArrowLeft, Menu, MessageSquare, Trash2, Sparkles, Heart, Volume2, VolumeX } from "lucide-react"
+import { Send, Mic, ArrowLeft, Menu, MessageSquare, Trash2, Sparkles, Volume2, VolumeX } from "lucide-react"
 import { useUserStore } from "../../../store/userStore"
 import { useAuth } from "../../../contexts/AuthContext"
 import VoiceModal from "./VoiceModal"
@@ -49,6 +49,11 @@ export default function Chat({ onBack }) {
   })
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [voicesLoaded, setVoicesLoaded] = useState(false)
+  const [hasSeenWelcome, setHasSeenWelcome] = useState(() => {
+    // Check if user has seen the welcome message before
+    const seen = localStorage.getItem('chat-welcome-seen')
+    return seen === 'true'
+  })
 
   const chatEndRef = useRef(null)
   const inputRef = useRef(null)
@@ -200,8 +205,8 @@ export default function Chat({ onBack }) {
           })
           
           setChatSessions(transformedSessions)
-          // Set the first session as current
-          setCurrentSessionId(transformedSessions[0].session_id)
+          // Don't set current session - always start with a new chat
+          setCurrentSessionId(null)
         }
       } catch (error) {
         console.error('Error fetching sessions:', error)
@@ -218,6 +223,12 @@ export default function Chat({ onBack }) {
 
   const handleSendMessage = async (messageText = currentMessage) => {
     if (!messageText.trim() || !currentUser?.uid) return
+
+    // Mark welcome as seen when user sends first message
+    if (!hasSeenWelcome) {
+      setHasSeenWelcome(true)
+      localStorage.setItem('chat-welcome-seen', 'true')
+    }
 
     // Normalize timestamp to ISO format
     const timestamp = new Date().toISOString()
@@ -834,40 +845,13 @@ export default function Chat({ onBack }) {
                   Nivi
                 </h1>
                 <p className="text-xs text-blue-300">
-                  {isSpeaking ? (
-                    <span className="flex items-center gap-1">
-                      <span className="inline-block w-1 h-1 bg-blue-400 rounded-full animate-pulse" />
-                      Speaking...
-                    </span>
-                  ) : (
-                    'Always here to listen'
-                  )}
+                  Always here to listen
                 </p>
               </div>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Auto-speak toggle */}
-            <motion.button
-              onClick={() => {
-                setAutoSpeak(!autoSpeak)
-                if (autoSpeak) {
-                  stopSpeaking()
-                }
-              }}
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              className={`p-2 rounded-lg transition-all ${
-                autoSpeak
-                  ? 'text-blue-400 bg-blue-500/20 border border-blue-400/30'
-                  : 'text-ar-gray-300 hover:text-white hover:bg-blue-500/10'
-              }`}
-              title={autoSpeak ? 'Auto-speak enabled' : 'Auto-speak disabled'}
-            >
-              {autoSpeak ? <Volume2 size={20} /> : <VolumeX size={20} />}
-            </motion.button>
-
             {/* Menu button */}
             <motion.button
               onClick={() => setShowSidebar(!showSidebar)}
@@ -882,97 +866,38 @@ export default function Chat({ onBack }) {
 
         {/* Messages Area */}
         <div className="flex-1 overflow-y-auto relative">
-          {chatMessages.length === 0 ? (
-            // Welcome Screen
+          {chatMessages.length === 0 && !hasSeenWelcome ? (
+            // Welcome Screen - Only shown once for first-time users
             <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.6 }}
-              className="flex flex-col items-center justify-center h-full px-6 text-center relative"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+              className="flex items-center justify-center h-full px-6"
             >
-              {/* Floating particles */}
-              <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                {[...Array(6)].map((_, i) => (
-                  <motion.div
-                    key={i}
-                    className="absolute w-1 h-1 bg-blue-400/30 rounded-full"
-                    style={{
-                      left: `${20 + i * 15}%`,
-                      top: `${30 + (i % 2) * 40}%`,
-                    }}
-                    animate={{
-                      y: [-10, 10, -10],
-                      opacity: [0.3, 0.8, 0.3],
-                    }}
-                    transition={{
-                      duration: 3 + i * 0.5,
-                      repeat: Infinity,
-                      ease: "easeInOut",
-                      delay: i * 0.5
-                    }}
-                  />
-                ))}
-              </div>
-
-              <motion.div
-                className="relative mb-6"
-                animate={{
-                  scale: [1, 1.05, 1],
-                }}
-                transition={{
-                  duration: 4,
-                  repeat: Infinity,
-                  ease: "easeInOut"
-                }}
-              >
-                <div className="w-20 h-20 bg-gradient-to-br from-blue-500/30 to-blue-400/20 backdrop-blur-sm border border-blue-400/30 rounded-full flex items-center justify-center relative overflow-hidden">
-                  <span className="text-white text-3xl font-semibold relative z-10">N</span>
-                  <motion.div
-                    className="absolute inset-0 bg-gradient-to-r from-blue-400/20 to-blue-300/15"
-                    animate={{
-                      rotate: [0, 360],
-                    }}
-                    transition={{
-                      duration: 10,
-                      repeat: Infinity,
-                      ease: "linear"
-                    }}
-                  />
-                </div>
+              <p className="text-blue-200/70 text-center text-lg max-w-md">
+                Share your thoughts, feelings, or anything on your mind
+              </p>
+            </motion.div>
+          ) : chatMessages.length === 0 ? (
+            // Empty state for returning users
+            <div className="flex items-center justify-center h-full px-6">
+              <div className="text-center">
                 <motion.div
-                  className="absolute -inset-2 bg-gradient-to-r from-blue-400/20 to-blue-300/15 rounded-full blur-lg"
+                  className="w-16 h-16 bg-gradient-to-br from-blue-500/20 to-blue-400/10 backdrop-blur-sm border border-blue-400/20 rounded-full flex items-center justify-center mx-auto mb-4"
                   animate={{
-                    opacity: [0.3, 0.6, 0.3],
-                    scale: [1, 1.1, 1],
+                    scale: [1, 1.05, 1],
                   }}
                   transition={{
                     duration: 3,
                     repeat: Infinity,
                     ease: "easeInOut"
                   }}
-                />
-              </motion.div>
-
-              <motion.h2
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-                className="text-3xl font-poppins font-semibold text-white mb-3"
-              >
-                Always here to listen
-              </motion.h2>
-
-              <motion.p
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 }}
-                className="text-blue-200/80 max-w-md leading-relaxed"
-              >
-                I'm Nivi, your wellness companion. Share your thoughts, feelings, or anything that's on your mind. This is a safe space for you.
-              </motion.p>
-
-
-            </motion.div>
+                >
+                  <span className="text-white text-2xl font-semibold">N</span>
+                </motion.div>
+                <p className="text-gray-400 text-sm">Start a new conversation</p>
+              </div>
+            </div>
           ) : (
             // Chat Messages
             <div className="px-6 py-6 space-y-6 max-w-4xl mx-auto">
