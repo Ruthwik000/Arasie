@@ -13,9 +13,13 @@ export default function Chat({ onBack }) {
   const { currentUser } = useAuth()
 
   const handleBack = async () => {
-    // Stop any ongoing speech
-    if (window.speechSynthesis) {
-      window.speechSynthesis.cancel()
+    // Stop any ongoing speech - with proper state check
+    if (window.speechSynthesis && window.speechSynthesis.speaking) {
+      try {
+        window.speechSynthesis.cancel()
+      } catch (error) {
+        console.warn('Error cancelling speech:', error)
+      }
     }
 
     // Log chat session when user leaves
@@ -38,8 +42,13 @@ export default function Chat({ onBack }) {
   const [isLoading, setIsLoading] = useState(false)
   const [showSidebar, setShowSidebar] = useState(false)
   const [showVoiceModal, setShowVoiceModal] = useState(false)
-  const [autoSpeak, setAutoSpeak] = useState(false) // Auto-speak AI responses
+  const [autoSpeak, setAutoSpeak] = useState(() => {
+    // Persist auto-speak preference
+    const saved = localStorage.getItem('chat-auto-speak')
+    return saved ? JSON.parse(saved) : false
+  })
   const [isSpeaking, setIsSpeaking] = useState(false)
+  const [voicesLoaded, setVoicesLoaded] = useState(false)
 
   const chatEndRef = useRef(null)
   const inputRef = useRef(null)
@@ -52,12 +61,32 @@ export default function Chat({ onBack }) {
   useEffect(() => {
     if ('speechSynthesis' in window) {
       speechSynthRef.current = window.speechSynthesis
+      
+      // Wait for voices to load
+      const loadVoices = () => {
+        const voices = speechSynthRef.current.getVoices()
+        if (voices.length > 0) {
+          setVoicesLoaded(true)
+        }
+      }
+      
+      // Load voices immediately if available
+      loadVoices()
+      
+      // Also listen for voiceschanged event
+      if (speechSynthRef.current.onvoiceschanged !== undefined) {
+        speechSynthRef.current.onvoiceschanged = loadVoices
+      }
     }
 
     return () => {
       // Cleanup: stop any ongoing speech
-      if (speechSynthRef.current) {
-        speechSynthRef.current.cancel()
+      if (speechSynthRef.current && speechSynthRef.current.speaking) {
+        try {
+          speechSynthRef.current.cancel()
+        } catch (error) {
+          console.warn('Cleanup speech error:', error)
+        }
       }
       // Ensure body styles are reset on unmount
       document.body.style.overflow = ''
@@ -68,11 +97,13 @@ export default function Chat({ onBack }) {
 
   // Function to speak text
   const speakText = (text) => {
-    if (!speechSynthRef.current || !text) return
+    if (!speechSynthRef.current || !text || !voicesLoaded) return
 
     try {
       // Cancel any ongoing speech
-      speechSynthRef.current.cancel()
+      if (speechSynthRef.current.speaking) {
+        speechSynthRef.current.cancel()
+      }
 
       const utterance = new SpeechSynthesisUtterance(text)
       
@@ -81,7 +112,7 @@ export default function Chat({ onBack }) {
       utterance.pitch = 1.1 // Slightly higher pitch for warmth
       utterance.volume = 1.0
       
-      // Try to get a female voice
+      // Try to get a female voice (only after voices are loaded)
       const voices = speechSynthRef.current.getVoices()
       const femaleVoice = voices.find(voice => 
         voice.name.includes('Female') || 
@@ -106,11 +137,20 @@ export default function Chat({ onBack }) {
 
   // Function to stop speaking
   const stopSpeaking = () => {
-    if (speechSynthRef.current) {
-      speechSynthRef.current.cancel()
+    if (speechSynthRef.current && speechSynthRef.current.speaking) {
+      try {
+        speechSynthRef.current.cancel()
+      } catch (error) {
+        console.warn('Error stopping speech:', error)
+      }
       setIsSpeaking(false)
     }
   }
+  
+  // Persist auto-speak preference
+  useEffect(() => {
+    localStorage.setItem('chat-auto-speak', JSON.stringify(autoSpeak))
+  }, [autoSpeak])
 
   // Load chat sessions on mount
   useEffect(() => {
@@ -179,10 +219,13 @@ export default function Chat({ onBack }) {
   const handleSendMessage = async (messageText = currentMessage) => {
     if (!messageText.trim() || !currentUser?.uid) return
 
+    // Normalize timestamp to ISO format
+    const timestamp = new Date().toISOString()
+    
     const userMessage = {
       role: 'user',
       content: messageText,
-      timestamp: new Date().toISOString()
+      timestamp: timestamp
     }
 
     // If it's a new chat, create a session entry first
@@ -239,10 +282,13 @@ export default function Chat({ onBack }) {
         throw new Error('API returned unsuccessful response')
       }
 
+      // Normalize timestamp to ISO format
+      const aiTimestamp = data.timestamp ? new Date(data.timestamp).toISOString() : new Date().toISOString()
+      
       const aiMessage = {
         role: 'assistant',
         content: data.response,
-        timestamp: data.timestamp || new Date().toISOString()
+        timestamp: aiTimestamp
       }
 
       // Update session with AI response and session_id
@@ -253,23 +299,33 @@ export default function Chat({ onBack }) {
             return {
               ...session,
               session_id: data.session_id,
-              messages: [...session.messages, aiMessage]
+              messages: [...session.messages, aiMessage],
+              created_at: new Date().toISOString() // Update to current time
             }
           }
           return session
         }))
         setCurrentSessionId(data.session_id)
       } else {
-        // For existing chats, update the matching session
-        setChatSessions(prev => prev.map(session => {
-          if (session.session_id === currentSessionId) {
-            return {
-              ...session,
-              messages: [...session.messages, aiMessage]
+        // For existing chats, update the matching session and move to top with new timestamp
+        setChatSessions(prev => {
+          const updatedSessions = prev.map(session => {
+            if (session.session_id === currentSessionId) {
+              return {
+                ...session,
+                messages: [...session.messages, aiMessage],
+                created_at: new Date().toISOString() // Update to current time
+              }
             }
-          }
-          return session
-        }))
+            return session
+          })
+          
+          // Move the updated session to the top
+          const currentSession = updatedSessions.find(s => s.session_id === currentSessionId)
+          const otherSessions = updatedSessions.filter(s => s.session_id !== currentSessionId)
+          
+          return currentSession ? [currentSession, ...otherSessions] : updatedSessions
+        })
       }
 
       // Speak the AI response
@@ -282,9 +338,16 @@ export default function Chat({ onBack }) {
       }
     } catch (error) {
       console.error('Error getting AI response:', error)
+      
+      // Check if it's a network error
+      const isNetworkError = !navigator.onLine || error.message.includes('fetch')
+      const errorContent = isNetworkError
+        ? "I'm having trouble connecting right now. Please check your internet connection and try again."
+        : "I'm sorry, I'm having trouble responding right now. Please try again in a moment. Remember, if you're experiencing a mental health crisis, please reach out to a healthcare professional or crisis helpline."
+      
       const errorMessage = {
         role: 'assistant',
-        content: "I'm sorry, I'm having trouble responding right now. Please try again in a moment. Remember, if you're experiencing a mental health crisis, please reach out to a healthcare professional or crisis helpline.",
+        content: errorContent,
         timestamp: new Date().toISOString()
       }
       
@@ -319,11 +382,56 @@ export default function Chat({ onBack }) {
     setShowSidebar(false)
   }
 
+  // Group sessions by date
+  const groupSessionsByDate = () => {
+    const today = new Date()
+    const yesterday = new Date(today)
+    yesterday.setDate(yesterday.getDate() - 1)
+    const lastWeek = new Date(today)
+    lastWeek.setDate(lastWeek.getDate() - 7)
+    const lastMonth = new Date(today)
+    lastMonth.setDate(lastMonth.getDate() - 30)
+
+    const groups = {
+      today: [],
+      yesterday: [],
+      thisWeek: [],
+      thisMonth: [],
+      older: []
+    }
+
+    chatSessions.forEach(session => {
+      const sessionDate = new Date(session.created_at)
+      const isToday = sessionDate.toDateString() === today.toDateString()
+      const isYesterday = sessionDate.toDateString() === yesterday.toDateString()
+      const isThisWeek = sessionDate > lastWeek && !isToday && !isYesterday
+      const isThisMonth = sessionDate > lastMonth && !isThisWeek && !isToday && !isYesterday
+
+      if (isToday) groups.today.push(session)
+      else if (isYesterday) groups.yesterday.push(session)
+      else if (isThisWeek) groups.thisWeek.push(session)
+      else if (isThisMonth) groups.thisMonth.push(session)
+      else groups.older.push(session)
+    })
+
+    return groups
+  }
+
   const deleteChat = (sessionId) => {
-    setChatSessions(prev => prev.filter(session => session.session_id !== sessionId))
+    // Handle null session IDs (unsaved sessions)
+    if (sessionId === null) {
+      setChatSessions(prev => prev.filter((session, index) => index !== 0 || session.session_id !== null))
+    } else {
+      setChatSessions(prev => prev.filter(session => session.session_id !== sessionId))
+    }
+    
     if (sessionId === currentSessionId && chatSessions.length > 1) {
       const remainingSessions = chatSessions.filter(session => session.session_id !== sessionId)
-      setCurrentSessionId(remainingSessions[0].session_id)
+      if (remainingSessions.length > 0) {
+        setCurrentSessionId(remainingSessions[0].session_id)
+      } else {
+        setCurrentSessionId(null)
+      }
     }
   }
 
@@ -333,16 +441,18 @@ export default function Chat({ onBack }) {
 
   const handleVoiceModalClose = () => {
     setShowVoiceModal(false)
-    // Ensure body styles are reset
+    // Ensure body styles are reset and refocus input
     setTimeout(() => {
       document.body.style.overflow = ''
       document.body.style.position = ''
       document.body.style.width = ''
+      // Refocus input after modal closes
+      inputRef.current?.focus()
     }, 100)
   }
 
   return (
-    <div className="flex h-screen w-full bg-gradient-to-br from-ar-black via-ar-black to-blue-900/20 fixed inset-0 z-50">
+    <div className="flex flex-row-reverse h-screen w-full bg-gradient-to-br from-ar-black via-ar-black to-blue-900/20 fixed inset-0 z-50">
       {/* Animated Background Elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <motion.div
@@ -423,42 +533,239 @@ export default function Chat({ onBack }) {
                     No chat history yet
                   </div>
                 ) : (
-                  chatSessions.map((session, index) => (
-                    <motion.div
-                      key={session.session_id || `new-${index}`}
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                      className={`group flex items-center justify-between p-3 rounded-xl mb-2 cursor-pointer transition-all duration-300 ${session.session_id === currentSessionId
-                        ? 'bg-gradient-to-r from-blue-600/30 to-blue-500/15 border border-blue-500/40 text-white shadow-lg shadow-blue-500/10'
-                        : 'text-ar-gray-300 hover:bg-blue-500/10 hover:border hover:border-blue-500/20 hover:text-white backdrop-blur-sm'
-                        }`}
-                      onClick={() => {
-                        setCurrentSessionId(session.session_id)
-                        setShowSidebar(false)
-                      }}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {session.title || 'New Chat'}
-                        </p>
-                        <p className="text-xs text-ar-gray-400">
-                          {session.created_at ? new Date(session.created_at).toLocaleDateString() : 'Today'}
-                        </p>
-                      </div>
-                      {chatSessions.length > 1 && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            deleteChat(session.session_id)
-                          }}
-                          className="opacity-0 group-hover:opacity-100 p-1 text-ar-gray-400 hover:text-red-400 transition-all duration-300"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                    </motion.div>
-                  ))
+                  (() => {
+                    const groups = groupSessionsByDate()
+                    let globalIndex = 0
+                    
+                    return (
+                      <>
+                        {groups.today.length > 0 && (
+                          <div className="mb-4">
+                            <h4 className="text-xs font-semibold text-ar-gray-500 uppercase tracking-wider mb-2 px-2">Today</h4>
+                            {groups.today.map((session) => {
+                              const index = globalIndex++
+                              return (
+                                <motion.div
+                                  key={session.session_id || `new-${index}`}
+                                  initial={{ opacity: 0, x: 20 }}
+                                  animate={{ opacity: 1, x: 0 }}
+                                  transition={{ delay: index * 0.05 }}
+                                  className={`group flex items-center justify-between p-3 rounded-xl mb-2 cursor-pointer transition-all duration-300 ${session.session_id === currentSessionId
+                                    ? 'bg-gradient-to-r from-blue-600/30 to-blue-500/15 border border-blue-500/40 text-white shadow-lg shadow-blue-500/10'
+                                    : 'text-ar-gray-300 hover:bg-blue-500/10 hover:border hover:border-blue-500/20 hover:text-white backdrop-blur-sm'
+                                    }`}
+                                  onClick={() => {
+                                    setCurrentSessionId(session.session_id)
+                                    setShowSidebar(false)
+                                  }}
+                                >
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium truncate">
+                                      {session.title || 'New Chat'}
+                                    </p>
+                                    <p className="text-xs text-ar-gray-400">
+                                      {new Date(session.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </p>
+                                  </div>
+                                  {chatSessions.length > 1 && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        deleteChat(session.session_id)
+                                      }}
+                                      className="opacity-0 group-hover:opacity-100 p-1 text-ar-gray-400 hover:text-red-400 transition-all duration-300"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  )}
+                                </motion.div>
+                              )
+                            })}
+                          </div>
+                        )}
+
+                        {groups.yesterday.length > 0 && (
+                          <div className="mb-4">
+                            <h4 className="text-xs font-semibold text-ar-gray-500 uppercase tracking-wider mb-2 px-2">Yesterday</h4>
+                            {groups.yesterday.map((session) => {
+                              const index = globalIndex++
+                              return (
+                                <motion.div
+                                  key={session.session_id || `new-${index}`}
+                                  initial={{ opacity: 0, x: 20 }}
+                                  animate={{ opacity: 1, x: 0 }}
+                                  transition={{ delay: index * 0.05 }}
+                                  className={`group flex items-center justify-between p-3 rounded-xl mb-2 cursor-pointer transition-all duration-300 ${session.session_id === currentSessionId
+                                    ? 'bg-gradient-to-r from-blue-600/30 to-blue-500/15 border border-blue-500/40 text-white shadow-lg shadow-blue-500/10'
+                                    : 'text-ar-gray-300 hover:bg-blue-500/10 hover:border hover:border-blue-500/20 hover:text-white backdrop-blur-sm'
+                                    }`}
+                                  onClick={() => {
+                                    setCurrentSessionId(session.session_id)
+                                    setShowSidebar(false)
+                                  }}
+                                >
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium truncate">
+                                      {session.title || 'New Chat'}
+                                    </p>
+                                    <p className="text-xs text-ar-gray-400">
+                                      {new Date(session.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </p>
+                                  </div>
+                                  {chatSessions.length > 1 && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        deleteChat(session.session_id)
+                                      }}
+                                      className="opacity-0 group-hover:opacity-100 p-1 text-ar-gray-400 hover:text-red-400 transition-all duration-300"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  )}
+                                </motion.div>
+                              )
+                            })}
+                          </div>
+                        )}
+
+                        {groups.thisWeek.length > 0 && (
+                          <div className="mb-4">
+                            <h4 className="text-xs font-semibold text-ar-gray-500 uppercase tracking-wider mb-2 px-2">This Week</h4>
+                            {groups.thisWeek.map((session) => {
+                              const index = globalIndex++
+                              return (
+                                <motion.div
+                                  key={session.session_id || `new-${index}`}
+                                  initial={{ opacity: 0, x: 20 }}
+                                  animate={{ opacity: 1, x: 0 }}
+                                  transition={{ delay: index * 0.05 }}
+                                  className={`group flex items-center justify-between p-3 rounded-xl mb-2 cursor-pointer transition-all duration-300 ${session.session_id === currentSessionId
+                                    ? 'bg-gradient-to-r from-blue-600/30 to-blue-500/15 border border-blue-500/40 text-white shadow-lg shadow-blue-500/10'
+                                    : 'text-ar-gray-300 hover:bg-blue-500/10 hover:border hover:border-blue-500/20 hover:text-white backdrop-blur-sm'
+                                    }`}
+                                  onClick={() => {
+                                    setCurrentSessionId(session.session_id)
+                                    setShowSidebar(false)
+                                  }}
+                                >
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium truncate">
+                                      {session.title || 'New Chat'}
+                                    </p>
+                                    <p className="text-xs text-ar-gray-400">
+                                      {new Date(session.created_at).toLocaleDateString([], { weekday: 'short' })}
+                                    </p>
+                                  </div>
+                                  {chatSessions.length > 1 && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        deleteChat(session.session_id)
+                                      }}
+                                      className="opacity-0 group-hover:opacity-100 p-1 text-ar-gray-400 hover:text-red-400 transition-all duration-300"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  )}
+                                </motion.div>
+                              )
+                            })}
+                          </div>
+                        )}
+
+                        {groups.thisMonth.length > 0 && (
+                          <div className="mb-4">
+                            <h4 className="text-xs font-semibold text-ar-gray-500 uppercase tracking-wider mb-2 px-2">This Month</h4>
+                            {groups.thisMonth.map((session) => {
+                              const index = globalIndex++
+                              return (
+                                <motion.div
+                                  key={session.session_id || `new-${index}`}
+                                  initial={{ opacity: 0, x: 20 }}
+                                  animate={{ opacity: 1, x: 0 }}
+                                  transition={{ delay: index * 0.05 }}
+                                  className={`group flex items-center justify-between p-3 rounded-xl mb-2 cursor-pointer transition-all duration-300 ${session.session_id === currentSessionId
+                                    ? 'bg-gradient-to-r from-blue-600/30 to-blue-500/15 border border-blue-500/40 text-white shadow-lg shadow-blue-500/10'
+                                    : 'text-ar-gray-300 hover:bg-blue-500/10 hover:border hover:border-blue-500/20 hover:text-white backdrop-blur-sm'
+                                    }`}
+                                  onClick={() => {
+                                    setCurrentSessionId(session.session_id)
+                                    setShowSidebar(false)
+                                  }}
+                                >
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium truncate">
+                                      {session.title || 'New Chat'}
+                                    </p>
+                                    <p className="text-xs text-ar-gray-400">
+                                      {new Date(session.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                                    </p>
+                                  </div>
+                                  {chatSessions.length > 1 && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        deleteChat(session.session_id)
+                                      }}
+                                      className="opacity-0 group-hover:opacity-100 p-1 text-ar-gray-400 hover:text-red-400 transition-all duration-300"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  )}
+                                </motion.div>
+                              )
+                            })}
+                          </div>
+                        )}
+
+                        {groups.older.length > 0 && (
+                          <div className="mb-4">
+                            <h4 className="text-xs font-semibold text-ar-gray-500 uppercase tracking-wider mb-2 px-2">Older</h4>
+                            {groups.older.map((session) => {
+                              const index = globalIndex++
+                              return (
+                                <motion.div
+                                  key={session.session_id || `new-${index}`}
+                                  initial={{ opacity: 0, x: 20 }}
+                                  animate={{ opacity: 1, x: 0 }}
+                                  transition={{ delay: index * 0.05 }}
+                                  className={`group flex items-center justify-between p-3 rounded-xl mb-2 cursor-pointer transition-all duration-300 ${session.session_id === currentSessionId
+                                    ? 'bg-gradient-to-r from-blue-600/30 to-blue-500/15 border border-blue-500/40 text-white shadow-lg shadow-blue-500/10'
+                                    : 'text-ar-gray-300 hover:bg-blue-500/10 hover:border hover:border-blue-500/20 hover:text-white backdrop-blur-sm'
+                                    }`}
+                                  onClick={() => {
+                                    setCurrentSessionId(session.session_id)
+                                    setShowSidebar(false)
+                                  }}
+                                >
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium truncate">
+                                      {session.title || 'New Chat'}
+                                    </p>
+                                    <p className="text-xs text-ar-gray-400">
+                                      {new Date(session.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                                    </p>
+                                  </div>
+                                  {chatSessions.length > 1 && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        deleteChat(session.session_id)
+                                      }}
+                                      className="opacity-0 group-hover:opacity-100 p-1 text-ar-gray-400 hover:text-red-400 transition-all duration-300"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  )}
+                                </motion.div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </>
+                    )
+                  })()
                 )}
               </div>
             </motion.div>

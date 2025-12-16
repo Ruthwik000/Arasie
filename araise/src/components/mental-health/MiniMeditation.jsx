@@ -2,6 +2,8 @@ import { useState } from "react"
 import { motion } from "framer-motion"
 import { Play } from "lucide-react"
 import { useUserStore } from "../../store/userStore"
+
+import OptimizedImage from "../OptimizedImage"
 import MeditationSession from "./MeditationSession"
 
 const meditations = [
@@ -10,7 +12,7 @@ const meditations = [
     name: 'Body Scan', 
     description: 'Mindful body awareness for deep relaxation',
     duration: '10 min',
-    image: './images/mental-health/mini meditation/bodyscan.jpeg',
+    image: './images/mental-health/mini meditation/bodyscan.webp',
     audioSrc: '/sounds/mental-health/mediation/bodyscan.mp3'
   },
   { 
@@ -18,7 +20,7 @@ const meditations = [
     name: 'Mantra Meditation', 
     description: 'Sacred sounds for inner peace and focus',
     duration: '8 min',
-    image: './images/mental-health/mini meditation/mantra-meditation.jpg',
+    image: './images/mental-health/mini meditation/mantra-meditation.webp',
     audioSrc: '/sounds/mental-health/mediation/mantra-meditation.mp3'
   },
   { 
@@ -26,7 +28,7 @@ const meditations = [
     name: 'Mindfulness', 
     description: 'Present moment awareness practice',
     duration: '12 min',
-    image: './images/mental-health/mini meditation/mindfulness.jpg',
+    image: './images/mental-health/mini meditation/mindfulness.webp',
     audioSrc: '/sounds/mental-health/mediation/mindfulness.mp3'
   },
   { 
@@ -34,7 +36,7 @@ const meditations = [
     name: 'Self Love', 
     description: 'Compassionate meditation for self-acceptance',
     duration: '15 min',
-    image: './images/mental-health/mini meditation/selflove.jpg',
+    image: './images/mental-health/mini meditation/selflove.webp',
     audioSrc: '/sounds/mental-health/mediation/selflove.mp3'
   },
 ]
@@ -42,6 +44,8 @@ const meditations = [
 export default function MiniMeditation({ onBack }) {
   const [selectedMeditation, setSelectedMeditation] = useState(null)
   const { updateMentalHealthProgress, logMeditationSession } = useUserStore()
+
+  // Images are now compressed WebP - no preloading needed
 
   const handleStartMeditation = (meditation) => {
     setSelectedMeditation(meditation)
@@ -87,22 +91,21 @@ export default function MiniMeditation({ onBack }) {
             className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-sm border border-gray-700/30 group hover:scale-105 transition-all duration-300"
           >
             {/* Background Image */}
-            <img 
-              src={meditation.image}
-              alt={meditation.name}
-              className="absolute inset-0 w-full h-full object-cover opacity-70 group-hover:opacity-90 transition-opacity duration-300"
-              onError={(e) => {
-                console.log(`Failed to load image: ${meditation.image}`)
-                e.target.style.display = 'none'
-              }}
-            />
+            <div className="absolute inset-0">
+              <OptimizedImage 
+                src={meditation.image}
+                alt={meditation.name}
+                className="w-full h-full object-cover opacity-70 group-hover:opacity-90 transition-opacity duration-300"
+                fallbackGradient="from-purple-900 to-indigo-900"
+              />
+            </div>
 
             
             {/* Overlay */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
             
             {/* Content */}
-            <div className="relative p-3 sm:p-6 aspect-[2/3] flex flex-col justify-between">
+            <div className="relative z-10 p-3 sm:p-6 aspect-[2/3] flex flex-col justify-between">
               <div className="flex-1 flex flex-col justify-center">
                 <h3 className="text-lg sm:text-2xl md:text-3xl font-hagrid font-bold text-white mb-1 sm:mb-3 leading-tight">{meditation.name}</h3>
                 <p className="text-gray-300 text-xs sm:text-sm leading-relaxed line-clamp-3 mb-2">{meditation.description}</p>

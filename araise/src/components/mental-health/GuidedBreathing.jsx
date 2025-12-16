@@ -1,6 +1,8 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useUserStore } from "../../store/userStore"
+
+import { OptimizedBackgroundImage } from "../OptimizedImage"
 import UnifiedBreathingSession from "./breathing-exercises/UnifiedBreathingSession"
 
 export default function GuidedBreathing({ onBack }) {
@@ -19,7 +21,7 @@ export default function GuidedBreathing({ onBack }) {
       cycles: 5,
       color: '#3b82f6',
       gradient: 'from-blue-600 to-blue-800',
-      backgroundImage: '/images/mental-health/GuidedBreathing/box breathing.jpg',
+      backgroundImage: '/images/mental-health/GuidedBreathing/box breathing.webp',
       steps: [
         { name: 'Inhale', duration: 4000, instruction: 'Breathe in slowly for 4 seconds' },
         { name: 'Hold', duration: 4000, instruction: 'Hold your breath for 4 seconds' },
@@ -36,7 +38,7 @@ export default function GuidedBreathing({ onBack }) {
       cycles: 4,
       color: '#9333ea',
       gradient: 'from-purple-600 to-purple-800',
-      backgroundImage: '/images/mental-health/GuidedBreathing/4-7-8 Breathing.jpg',
+      backgroundImage: '/images/mental-health/GuidedBreathing/4-7-8 Breathing.webp',
       steps: [
         { name: 'Inhale', duration: 4000, instruction: 'Breathe in through your nose for 4 seconds' },
         { name: 'Hold', duration: 7000, instruction: 'Hold your breath gently for 7 seconds' },
@@ -52,7 +54,7 @@ export default function GuidedBreathing({ onBack }) {
       cycles: 6,
       color: '#14b8a6',
       gradient: 'from-teal-600 to-teal-800',
-      backgroundImage: '/images/mental-health/GuidedBreathing/Alternate Nostril Breathing.jpg',
+      backgroundImage: '/images/mental-health/GuidedBreathing/Alternate Nostril Breathing.webp',
       steps: [
         { name: 'Inhale Left', duration: 4000, instruction: 'Close right nostril, inhale through left for 4 seconds' },
         { name: 'Hold', duration: 4000, instruction: 'Close both nostrils, hold for 4 seconds' },
@@ -68,7 +70,7 @@ export default function GuidedBreathing({ onBack }) {
       cycles: 8,
       color: '#22c55e',
       gradient: 'from-green-600 to-green-800',
-      backgroundImage: '/images/mental-health/GuidedBreathing/Deep Focus Breathing.jpg',
+      backgroundImage: '/images/mental-health/GuidedBreathing/Deep Focus Breathing.webp',
       steps: [
         { name: 'Inhale', duration: 5000, instruction: 'Breathe in deeply for 5 seconds' },
         { name: 'Exhale', duration: 5000, instruction: 'Breathe out slowly for 5 seconds' }
@@ -83,7 +85,7 @@ export default function GuidedBreathing({ onBack }) {
       cycles: 15,
       color: '#f97316',
       gradient: 'from-orange-600 to-orange-800',
-      backgroundImage: '/images/mental-health/GuidedBreathing/Resonance Breathing.jpg',
+      backgroundImage: '/images/mental-health/GuidedBreathing/Resonance Breathing.webp',
       steps: [
         { name: 'Inhale', duration: 5500, instruction: 'Breathe in gently for 5.5 seconds' },
         { name: 'Exhale', duration: 5500, instruction: 'Breathe out smoothly for 5.5 seconds' }
@@ -98,7 +100,7 @@ export default function GuidedBreathing({ onBack }) {
       cycles: 12,
       color: '#6366f1',
       gradient: 'from-indigo-600 to-indigo-800',
-      backgroundImage: '/images/mental-health/GuidedBreathing/Belly Breathing.jpg',
+      backgroundImage: '/images/mental-health/GuidedBreathing/Belly Breathing.webp',
       steps: [
         { name: 'Inhale', duration: 4000, instruction: 'Breathe into your belly for 4 seconds' },
         { name: 'Exhale', duration: 6000, instruction: 'Slowly exhale from your belly for 6 seconds' }
@@ -106,7 +108,7 @@ export default function GuidedBreathing({ onBack }) {
     }
   ]
 
-
+  // Images are now compressed WebP - no preloading needed
 
   const handleSessionComplete = async () => {
     const exercise = breathingExercises.find(ex => ex.id === selectedExercise)
@@ -278,31 +280,22 @@ export default function GuidedBreathing({ onBack }) {
 
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6 max-w-6xl mx-auto">
                 {breathingExercises.map((exercise, index) => (
-                  <motion.div
+                  <OptimizedBackgroundImage
                     key={exercise.id}
-                    className="relative h-48 sm:h-56 md:h-64 rounded-xl sm:rounded-2xl cursor-pointer transition-all duration-300 group overflow-hidden border border-white/10 hover:border-white/30"
+                    src={exercise.backgroundImage}
+                    className="h-48 sm:h-56 md:h-64 rounded-xl sm:rounded-2xl cursor-pointer transition-all duration-300 group overflow-hidden border border-white/10 hover:border-white/30"
                     onClick={() => handleStartExercise(exercise.id)}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.6, delay: index * 0.1 }}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
+                    overlay="bg-black/60 group-hover:bg-black/50 transition-all duration-300"
+                    fallbackGradient={exercise.gradient}
                   >
-                    {/* Background Image */}
-                    <div
-                      className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-all duration-300"
-                      style={{ 
-                        backgroundImage: `url("${exercise.backgroundImage}")`,
-                        backgroundSize: 'cover',
-                        backgroundPosition: 'center'
-                      }}
-                    />
-
-                    {/* Dark Overlay */}
-                    <div className="absolute inset-0 bg-black/60 group-hover:bg-black/50 transition-all duration-300" />
-
-                    {/* Content */}
-                    <div className="relative z-10 h-full flex flex-col justify-center items-center text-center p-3 sm:p-4 md:p-8">
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.6, delay: index * 0.1 }}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className="relative z-10 h-full flex flex-col justify-center items-center text-center p-3 sm:p-4 md:p-8"
+                    >
                       <div className="flex flex-col items-center justify-center h-full">
                         <h3 className="text-lg sm:text-xl md:text-3xl font-bold text-white mb-2 sm:mb-3 group-hover:text-white/90 transition-colors duration-300 leading-tight">
                           {exercise.name}
@@ -316,14 +309,8 @@ export default function GuidedBreathing({ onBack }) {
                           Start Exercise
                         </button>
                       </div>
-                    </div>
-
-                    {/* Hover Glow Effect */}
-                    <div 
-                      className="absolute inset-0 opacity-0 group-hover:opacity-20 transition-opacity duration-300 bg-gradient-to-t to-transparent"
-                      style={{ backgroundColor: `${exercise.color}30` }}
-                    />
-                  </motion.div>
+                    </motion.div>
+                  </OptimizedBackgroundImage>
                 ))}
               </div>
             </motion.div>
