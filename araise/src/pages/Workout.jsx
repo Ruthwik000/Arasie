@@ -19,6 +19,7 @@ import PoseAnalyzer from "../components/PoseAnalyzer"
 import WorkoutHub from "../components/workout/WorkoutHub"
 import CategorySelection from "../components/workout/CategorySelection"
 import SplitDetail from "../components/workout/SplitDetail"
+import DayExerciseView from "../components/workout/DayExerciseView"
 import WorkoutSession from "../components/workout/WorkoutSession"
 import CameraSelectionModal from "../components/CameraSelectionModal"
 import { workoutData, exerciseLibrary } from "../data/workoutData"
@@ -1356,6 +1357,9 @@ export default function Workout() {
       <Route path="/" element={<WorkoutHub />} />
       <Route path="/:category" element={<CategorySelection />} />
       <Route path="/:category/:splitId" element={<SplitDetail />} />
+
+      {/* Day exercise view (new route for viewing exercises before starting) */}
+      <Route path="/:category/:splitId/:dayId" element={<DayExerciseView />} />
 
       {/* Gym/Calisthenics routes (day-based) */}
       <Route path="/:category/:splitId/:dayId/session" element={<WorkoutSession />} />
