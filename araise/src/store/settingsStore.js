@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import notificationService from '../services/NotificationService'
 
+// Settings store - all data in memory only, no localStorage
 const useSettingsStore = create((set, get) => ({
       // Notification Settings
       notifications: {

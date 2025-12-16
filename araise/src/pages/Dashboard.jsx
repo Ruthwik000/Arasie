@@ -41,7 +41,9 @@ export default function Dashboard() {
     meals,
     focusLogs,
     focusTasks,
-    dailyFocusGoal
+    dailyFocusGoal,
+    currentWorkoutSession,
+    workoutHistory
   } = useUserStore()
 
   // Immediate authentication check - don't render anything if not properly authenticated
@@ -90,6 +92,71 @@ export default function Dashboard() {
     return Math.min((totalMinutes / goalMinutes) * 100, 100)
   }
 
+  // Calculate partial workout progress from in-progress session
+  const calculateWorkoutProgress = () => {
+    const today = new Date().toISOString().slice(0, 10)
+    const state = useUserStore.getState()
+    
+    // Check today's workout history for completed workouts
+    const todaysWorkouts = state.workoutHistory?.filter(workout => {
+      if (!workout.date && workout.startTime) {
+        const workoutDate = new Date(workout.startTime).toISOString().slice(0, 10)
+        return workoutDate === today
+      }
+      return workout.date === today
+    }) || []
+    
+    // First, check if there's any completed workout (priority)
+    const completedWorkout = todaysWorkouts.find(w => w.status === "completed")
+    if (completedWorkout) {
+      return 100
+    }
+    
+    // Then check for exited workouts with partial progress
+    const exitedWorkout = todaysWorkouts.find(w => w.status === "exited")
+    if (exitedWorkout) {
+      // Try to get progress from summary
+      if (exitedWorkout.summary && exitedWorkout.summary.totalExercises > 0) {
+        const { totalExercises, completedExercises } = exitedWorkout.summary
+        return Math.round((completedExercises / totalExercises) * 100)
+      }
+      
+      // Fallback: calculate from exercises array
+      if (exitedWorkout.exercises && Array.isArray(exitedWorkout.exercises)) {
+        const totalExercises = exitedWorkout.totalExercises || exitedWorkout.exercises.length
+        const completedExercises = exitedWorkout.exercises.filter(ex => ex.completed).length
+        if (totalExercises > 0) {
+          return Math.round((completedExercises / totalExercises) * 100)
+        }
+      }
+    }
+    
+    // Check for old workouts without status field
+    const oldWorkout = todaysWorkouts.find(w => !w.status)
+    if (oldWorkout) {
+      // Check if workout has totalExercises and completedExercises at root level
+      if (oldWorkout.totalExercises && typeof oldWorkout.completedExercises === 'number') {
+        return Math.round((oldWorkout.completedExercises / oldWorkout.totalExercises) * 100)
+      }
+      
+      // Otherwise assume completed
+      return 100
+    }
+    
+    // Check for in-progress workout
+    const inProgressWorkout = state.currentWorkoutSession
+    if (inProgressWorkout && inProgressWorkout.exercises) {
+      const totalExercises = inProgressWorkout.exercises.length
+      const completedExercises = inProgressWorkout.exercises.filter(ex => ex.completed).length
+      if (totalExercises > 0) {
+        const partialProgress = (completedExercises / totalExercises) * 100
+        return Math.min(partialProgress, 99) // Cap at 99% until fully completed
+      }
+    }
+    
+    return 0
+  }
+
   // Real-time progress stats with live updates
   const [progressStats, setProgressStats] = useState({
     workout: 0,
@@ -101,13 +168,13 @@ export default function Dashboard() {
   // Update progress stats in real-time (only when data actually changes)
   useEffect(() => {
     setProgressStats({
-      workout: workoutCompleted ? 100 : 0,
+      workout: calculateWorkoutProgress(),
       water: Math.min((waterProgress / (waterGoal || 3000)) * 100, 100), // Use configurable water goal
       diet: dietGoalMet ? 100 : Math.min((meals.length / 3) * 100, 100), // Show gradual progress based on meals logged
       mentalHealth: mentalHealthProgress,
       focus: calculateFocusProgress() // Use calculated focus progress based on daily goal
     })
-  }, [workoutCompleted, waterProgress, waterGoal, dietGoalMet, mentalHealthProgress, focusProgress, meals.length, focusLogs, focusTasks, dailyFocusGoal])
+  }, [workoutCompleted, waterProgress, waterGoal, dietGoalMet, mentalHealthProgress, focusProgress, meals.length, focusLogs, focusTasks, dailyFocusGoal, currentWorkoutSession, workoutHistory])
 
   // Rotate quotes every 5 seconds
   useEffect(() => {

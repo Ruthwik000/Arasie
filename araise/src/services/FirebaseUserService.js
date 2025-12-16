@@ -166,6 +166,74 @@ export class FirebaseUserService {
     return { newMeal, newCalories, dietGoalMet };
   }
 
+  // Save workout progress (in-progress session) to Firestore
+  async saveWorkoutProgress(workoutSessionData) {
+    if (!workoutSessionData || !workoutSessionData.exercises) {
+      console.warn('saveWorkoutProgress: No workout data to save');
+      return;
+    }
+
+    // Save the current workout session progress to a separate field
+    const progressData = {
+      id: workoutSessionData.id,
+      planName: workoutSessionData.planName,
+      planId: workoutSessionData.planId,
+      dayId: workoutSessionData.dayId,
+      type: workoutSessionData.type,
+      startTime: workoutSessionData.startTime,
+      currentExercise: workoutSessionData.currentExercise,
+      exercises: workoutSessionData.exercises.map(ex => ({
+        exerciseName: ex.exerciseName,
+        sets: ex.sets,
+        reps: ex.reps,
+        completed: ex.completed || false,
+        completedSets: ex.completedSets || 0,
+        setProgress: ex.setProgress || {}
+      })),
+      lastUpdated: new Date().toISOString()
+    };
+
+    // Save to a separate field for in-progress workouts
+    const updates = {
+      currentWorkoutProgress: progressData,
+      lastUpdated: serverTimestamp()
+    };
+
+    await updateDoc(this.userRef, updates);
+  }
+
+  // Load workout progress (in-progress session) from Firestore
+  async loadWorkoutProgress(planId, dayId = null) {
+    try {
+      const userDoc = await getDoc(this.userRef);
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        const progress = data.currentWorkoutProgress;
+        
+        // Check if the saved progress matches the requested workout
+        if (progress && progress.planId === planId) {
+          if (dayId && progress.dayId !== dayId) {
+            return null;
+          }
+          return progress;
+        }
+      }
+      return null;
+    } catch (error) {
+      console.error('Error loading workout progress:', error);
+      return null;
+    }
+  }
+
+  // Clear workout progress after completion
+  async clearWorkoutProgress() {
+    const updates = {
+      currentWorkoutProgress: null,
+      lastUpdated: serverTimestamp()
+    };
+    await updateDoc(this.userRef, updates);
+  }
+
   // Save workout session with real exercise data
   async saveWorkoutSession(workoutSessionData, currentHistory) {
     if (!workoutSessionData || !workoutSessionData.exercises || workoutSessionData.exercises.length === 0) {
@@ -996,7 +1064,6 @@ export class FirebaseUserService {
       };
 
       await updateDoc(this.userRef, updates);
-      console.log('✅ Archived data added for', date);
     } catch (error) {
       console.error('Error adding archived data:', error);
     }
@@ -1005,8 +1072,11 @@ export class FirebaseUserService {
   // Get activities for a specific date (checks both current data and archives)
   async getActivitiesForDate(date) {
     try {
+      // Force fresh fetch from Firestore (no cache)
       const userDoc = await getDoc(this.userRef);
+      
       if (!userDoc.exists()) {
+        console.warn('User document does not exist');
         return {
           water: [],
           diet: [],
@@ -1022,11 +1092,15 @@ export class FirebaseUserService {
 
       // Check if we have archived data for this date
       const dailyArchives = data.dailyArchives || {};
-      let archivedData = dailyArchives[targetDate];
+      let archivedData = null;
+      
+      // NEVER use archived data for today - always use live data
+      if (targetDate !== today) {
+        archivedData = dailyArchives[targetDate];
+      }
 
       // If no archived data exists for a past date, try to create it from current data
       if (!archivedData && targetDate !== today) {
-        console.log(`No archived data found for ${targetDate}, attempting to archive from current data`);
         const updatedArchives = await this.archiveDayData(targetDate, data);
         archivedData = updatedArchives[targetDate];
         
@@ -1047,17 +1121,36 @@ export class FirebaseUserService {
         mentalWellness: []
       };
 
-      // If we have archived data for this date, use it
-      if (archivedData && archivedData.activities) {
-        activities = {
-          water: archivedData.activities.water || [],
-          diet: archivedData.activities.meals || [],
-          workout: archivedData.activities.workouts || [],
-          focus: archivedData.activities.focus || [],
-          mentalWellness: archivedData.activities.mentalWellness || []
-        };
-      } else if (targetDate === today) {
+      // For today, ALWAYS check current data (including in-progress workout)
+      // even if archived data exists, because user might be actively working out
+      if (targetDate === today) {
         // For today, get current data
+        const completedWorkouts = (data.workoutHistory || []).filter(workout => {
+          if (!workout.date) return false;
+          return workout.date === targetDate;
+        });
+
+        // Check for in-progress workout for today
+        const inProgressWorkout = data.currentWorkoutProgress;
+        const workouts = [...completedWorkouts];
+        
+        if (inProgressWorkout && inProgressWorkout.startTime) {
+          const workoutDate = new Date(inProgressWorkout.startTime).toISOString().slice(0, 10);
+          
+          if (workoutDate === targetDate) {
+            // Add in-progress workout with special flag
+            const inProgressWorkoutData = {
+              ...inProgressWorkout,
+              isInProgress: true,
+              date: targetDate,
+              planName: inProgressWorkout.planName || 'In Progress',
+              exercises: inProgressWorkout.exercises || [],
+              id: inProgressWorkout.id || Date.now()
+            };
+            workouts.push(inProgressWorkoutData);
+          }
+        }
+
         activities = {
           water: (data.waterLogs || []).filter(log => {
             if (!log.time) return false;
@@ -1079,10 +1172,7 @@ export class FirebaseUserService {
               return false;
             }
           }),
-          workout: (data.workoutHistory || []).filter(workout => {
-            if (!workout.date) return false;
-            return workout.date === targetDate;
-          }),
+          workout: workouts,
           focus: (data.focusTasks || []).filter(task => {
             if (!task.date) return false;
             return task.date === targetDate;
@@ -1098,8 +1188,17 @@ export class FirebaseUserService {
             }
           })
         };
+      } else if (archivedData && archivedData.activities) {
+        // For past dates, use archived data if available
+        activities = {
+          water: archivedData.activities.water || [],
+          diet: archivedData.activities.meals || [],
+          workout: archivedData.activities.workouts || [],
+          focus: archivedData.activities.focus || [],
+          mentalWellness: archivedData.activities.mentalWellness || []
+        };
       } else {
-        // For past dates, also check current arrays (fallback for data not yet archived)
+        // For past dates without archived data, check current arrays (fallback)
         activities = {
           water: (data.waterLogs || []).filter(log => {
             if (!log.time) return false;
@@ -1187,7 +1286,9 @@ export class FirebaseUserService {
           // Other fields
           level: data.level || 1,
           streakCount: data.streakCount || 0,
-          calendar: data.calendar || []
+          calendar: data.calendar || [],
+          // In-progress workout
+          currentWorkoutSession: data.currentWorkoutProgress || null
         });
       }
     }, (error) => {
@@ -1334,7 +1435,6 @@ export class FirebaseUserService {
 
       for (const date of allDates) {
         if (!updatedArchives[date]) {
-          console.log(`Archiving historical data for ${date}`);
           updatedArchives = await this.archiveDayData(date, data);
           hasUpdates = true;
         }
@@ -1346,7 +1446,6 @@ export class FirebaseUserService {
           dailyArchives: updatedArchives,
           lastUpdated: serverTimestamp()
         });
-        console.log('Historical data archiving completed');
       }
 
     } catch (error) {

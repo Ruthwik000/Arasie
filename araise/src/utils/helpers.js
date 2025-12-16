@@ -26,37 +26,6 @@ export function getDaysAgo(days) {
   return date.toISOString().slice(0, 10)
 }
 
-// Local storage utilities
-export function saveToStorage(key, data) {
-  try {
-    localStorage.setItem(key, JSON.stringify(data))
-    return true
-  } catch (error) {
-    console.error('Failed to save to localStorage:', error)
-    return false
-  }
-}
-
-export function loadFromStorage(key, defaultValue = null) {
-  try {
-    const item = localStorage.getItem(key)
-    return item ? JSON.parse(item) : defaultValue
-  } catch (error) {
-    console.error('Failed to load from localStorage:', error)
-    return defaultValue
-  }
-}
-
-export function removeFromStorage(key) {
-  try {
-    localStorage.removeItem(key)
-    return true
-  } catch (error) {
-    console.error('Failed to remove from localStorage:', error)
-    return false
-  }
-}
-
 // Number utilities
 export function formatNumber(num, decimals = 0) {
   return Number(num).toFixed(decimals)

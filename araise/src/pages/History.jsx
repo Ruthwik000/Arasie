@@ -27,15 +27,40 @@ export default function History() {
 
 
   useEffect(() => {
-    loadActivitiesForDate()
+    if (firebaseService && date) {
+      loadActivitiesForDate()
+    }
   }, [date, firebaseService])
 
   const loadActivitiesForDate = async () => {
-    if (!firebaseService || !date) return
+    if (!firebaseService || !date) {
+      console.warn('Missing firebaseService or date:', { hasService: !!firebaseService, date })
+      return
+    }
 
     setLoading(true)
     try {
+      console.log('Loading activities for date:', date)
+      console.log('Using firebaseService:', firebaseService.userId)
+      
       const filteredActivities = await firebaseService.getActivitiesForDate(date)
+      
+      console.log('Received activities:', {
+        workout: filteredActivities.workout?.length || 0,
+        water: filteredActivities.water?.length || 0,
+        diet: filteredActivities.diet?.length || 0,
+        focus: filteredActivities.focus?.length || 0,
+        mentalWellness: filteredActivities.mentalWellness?.length || 0
+      })
+      
+      console.log('Full workout array:', filteredActivities.workout)
+      
+      if (filteredActivities.workout?.length > 0) {
+        console.log('First workout details:', filteredActivities.workout[0])
+      } else {
+        console.log('No workouts found for date:', date)
+      }
+      
       setActivities(filteredActivities)
     } catch (error) {
       console.error('Error loading activities for date:', error)

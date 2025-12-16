@@ -103,9 +103,26 @@ export default function WorkoutHistoryBox({ activities, isExpanded, onToggle }) 
                     <div className="flex items-center gap-2">
                       <Dumbbell className="text-red-400" size={16} />
                       <div>
-                        <span className="text-ar-white font-medium">
-                          {workout.planName || workout.name || workout.planId || 'Workout'}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-ar-white font-medium">
+                            {workout.planName || workout.name || workout.planId || 'Workout'}
+                          </span>
+                          {workout.status === 'exited' && (
+                            <span className="px-2 py-0.5 bg-orange-500/20 text-orange-400 text-xs rounded-full border border-orange-500/30">
+                              Exited Early
+                            </span>
+                          )}
+                          {workout.status === 'completed' && (
+                            <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded-full border border-green-500/30">
+                              ✓ Completed
+                            </span>
+                          )}
+                          {workout.isInProgress && (
+                            <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-400 text-xs rounded-full border border-yellow-500/30">
+                              In Progress
+                            </span>
+                          )}
+                        </div>
                         <div className="text-ar-gray-400 text-xs">
                           {workout.type === 'cardio' ? 'Cardio Workout' : 
                            workout.type === 'custom' ? 'Custom Workout' :
@@ -114,7 +131,7 @@ export default function WorkoutHistoryBox({ activities, isExpanded, onToggle }) 
                       </div>
                     </div>
                     <div className="text-ar-gray-400 text-sm">
-                      {workout.duration ? formatDuration(workout.duration) : '30m'}
+                      {workout.duration ? formatDuration(workout.duration) : workout.isInProgress ? 'Ongoing' : '30m'}
                     </div>
                   </div>
 
@@ -132,21 +149,37 @@ export default function WorkoutHistoryBox({ activities, isExpanded, onToggle }) 
                   </div>
 
                   {/* Exercise List */}
-                  {workout.exercises && workout.exercises.length > 0 && (
+                  {workout.exercises && workout.exercises.length > 0 && (() => {
+                    // For in-progress workouts, show only completed exercises
+                    const exercisesToShow = workout.isInProgress 
+                      ? workout.exercises.filter(ex => ex.completed || ex.completedSets > 0)
+                      : workout.exercises;
+                    
+                    if (exercisesToShow.length === 0) return null;
+                    
+                    return (
                     <div className="space-y-2">
                       <h6 className="text-ar-gray-300 text-sm font-medium">
-                        Exercises ({workout.exercises.length}):
+                        Exercises ({exercisesToShow.length}{workout.isInProgress ? ` of ${workout.exercises.length}` : ''}):
                       </h6>
                       <div className="space-y-2">
-                        {workout.exercises.map((exercise, exerciseIndex) => (
+                        {exercisesToShow.map((exercise, exerciseIndex) => (
                           <div
                             key={`exercise-${exerciseIndex}`}
                             className="p-3 bg-ar-gray-900/30 rounded border border-ar-gray-700/50"
                           >
                             <div className="flex items-center justify-between mb-2">
-                              <span className="text-ar-white text-sm font-medium">
-                                {exercise.exerciseName || exercise.name || `Exercise ${exerciseIndex + 1}`}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-ar-white text-sm font-medium">
+                                  {exercise.exerciseName || exercise.name || `Exercise ${exerciseIndex + 1}`}
+                                </span>
+                                {exercise.completed && (
+                                  <span className="text-green-400 text-xs">✓</span>
+                                )}
+                                {!exercise.completed && workout.isInProgress && (
+                                  <span className="text-ar-gray-500 text-xs">○</span>
+                                )}
+                              </div>
                               {exercise.duration && (
                                 <span className="text-ar-gray-400 text-xs">
                                   {formatDuration(exercise.duration)}
@@ -160,7 +193,7 @@ export default function WorkoutHistoryBox({ activities, isExpanded, onToggle }) 
                                 <div>
                                   <span className="text-ar-gray-400">Sets × Reps: </span>
                                   <span className="text-red-400 font-medium">
-                                    {exercise.sets} × {exercise.reps}
+                                    {exercise.completedSets || 0}/{exercise.sets} × {exercise.reps}
                                   </span>
                                 </div>
                               )}
@@ -210,7 +243,8 @@ export default function WorkoutHistoryBox({ activities, isExpanded, onToggle }) 
                         ))}
                       </div>
                     </div>
-                  )}
+                    );
+                  })()}
 
                   {/* Completion Time */}
                   {(workout.completedAt || workout.createdAt) && (

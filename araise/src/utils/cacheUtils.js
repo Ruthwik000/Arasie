@@ -18,12 +18,6 @@ export const clearAllCaches = async () => {
       await Promise.all(cacheNames.map(name => caches.delete(name)))
     }
     
-    // Clear local storage (optional - comment out if you want to keep user data)
-    // localStorage.clear()
-    
-    // Clear session storage
-    sessionStorage.clear()
-    
     console.log('All caches cleared successfully')
     
     // Reload the page
