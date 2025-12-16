@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useUserStore } from "../../store/userStore"
-import { useImagePreloader } from "../../hooks/useProgressiveImage"
+
 import { OptimizedBackgroundImage } from "../OptimizedImage"
 import UnifiedBreathingSession from "./breathing-exercises/UnifiedBreathingSession"
 
@@ -108,9 +108,7 @@ export default function GuidedBreathing({ onBack }) {
     }
   ]
 
-  // Preload all breathing exercise images
-  const imagesToPreload = breathingExercises.map(ex => ex.backgroundImage)
-  useImagePreloader(imagesToPreload)
+  // Images are now compressed WebP - no preloading needed
 
   const handleSessionComplete = async () => {
     const exercise = breathingExercises.find(ex => ex.id === selectedExercise)

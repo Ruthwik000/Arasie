@@ -2,7 +2,7 @@ import { useState } from "react"
 import { motion } from "framer-motion"
 import { Play } from "lucide-react"
 import { useUserStore } from "../../store/userStore"
-import { useImagePreloader } from "../../hooks/useProgressiveImage"
+
 import OptimizedImage from "../OptimizedImage"
 import MeditationSession from "./MeditationSession"
 
@@ -45,9 +45,7 @@ export default function MiniMeditation({ onBack }) {
   const [selectedMeditation, setSelectedMeditation] = useState(null)
   const { updateMentalHealthProgress, logMeditationSession } = useUserStore()
 
-  // Preload all meditation images
-  const imagesToPreload = meditations.map(m => m.image)
-  useImagePreloader(imagesToPreload)
+  // Images are now compressed WebP - no preloading needed
 
   const handleStartMeditation = (meditation) => {
     setSelectedMeditation(meditation)

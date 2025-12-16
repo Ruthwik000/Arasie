@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from "react"
 import { motion } from "framer-motion"
 import { Play, Pause } from "lucide-react"
 import { useUserStore } from "../../store/userStore"
-import { useImagePreloader } from "../../hooks/useProgressiveImage"
 import { OptimizedBackgroundImage } from "../OptimizedImage"
 
 const sounds = [
@@ -42,20 +41,7 @@ export default function SoundHealing({ onBack }) {
   const { updateMentalHealthProgress, logSoundHealingSession } = useUserStore()
   const audioRefs = useRef({})
 
-  // Aggressively preload all sound healing images
-  const imagesToPreload = sounds.map(sound => sound.image)
-  useImagePreloader(imagesToPreload)
-  
-  // Additional eager preloading for first 2 images
-  useEffect(() => {
-    sounds.slice(0, 2).forEach(sound => {
-      const link = document.createElement('link')
-      link.rel = 'preload'
-      link.as = 'image'
-      link.href = sound.image
-      document.head.appendChild(link)
-    })
-  }, [])
+  // Images are now compressed WebP - no preloading needed
   
   const handleBack = async () => {
     // Stop all playing audio and log session before leaving
@@ -172,8 +158,6 @@ export default function SoundHealing({ onBack }) {
             src={sound.image}
             className="overflow-hidden rounded-2xl sm:rounded-3xl bg-gray-900/80 backdrop-blur-sm border border-gray-700/30 group hover:scale-105 transition-all duration-300"
             overlay="bg-gradient-to-t from-black/80 via-black/40 to-transparent opacity-40 group-hover:opacity-60 transition-opacity duration-300"
-            fallbackGradient="from-gray-900/80 to-gray-900/80"
-            preload={index < 2}
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}

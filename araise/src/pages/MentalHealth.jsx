@@ -2,7 +2,7 @@ import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Wind, Music, BookOpen, Sun } from "lucide-react"
 import { useUserStore } from "../store/userStore"
-import { useImagePreloader } from "../hooks/useProgressiveImage"
+
 import { OptimizedBackgroundImage } from "../components/OptimizedImage"
 import Chat from "../components/mental-health/chat/Chat"
 import GuidedBreathing from "../components/mental-health/GuidedBreathing"
@@ -62,12 +62,7 @@ export default function MentalHealth() {
 
   const { name, updateMentalHealthProgress, setChatOpen, logMentalHealthEntry, setMentalHealthSubSection } = useUserStore()
 
-  // Preload all images for faster loading
-  const imagesToPreload = [
-    '/images/mental-health/chat.webp',
-    ...wellnessTools.map(tool => tool.backgroundImage)
-  ]
-  useImagePreloader(imagesToPreload)
+  // Images are now compressed WebP - no preloading needed
 
   // Handle UI state when activeSection changes
   useEffect(() => {
