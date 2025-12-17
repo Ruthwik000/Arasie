@@ -8,6 +8,12 @@ class WebSocketService {
     this.maxReconnectAttempts = 5;
     this.reconnectInterval = 3000;
     this.currentExercise = null;
+    this.reconnectTimeoutId = null;
+    this.isReconnecting = false;
+    this.heartbeatIntervalId = null;
+    this.heartbeatInterval = 30000; // 30 seconds
+    this.missedHeartbeats = 0;
+    this.maxMissedHeartbeats = 3;
     this.callbacks = {
       onConnect: [],
       onDisconnect: [],
@@ -29,33 +35,51 @@ class WebSocketService {
       return;
     }
 
-    // Determine base WebSocket URL
-    const wsBaseUrl = "`wss://araise-backend-code.onrender.com"
+    // Determine WebSocket URL based on environment
+    const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const wsProtocol = isDevelopment ? 'ws' : 'wss';
+    const wsHost = isDevelopment 
+      ? 'localhost:8000' 
+      : (import.meta.env.VITE_WS_HOST || 'araise-backend-code.onrender.com');
     
     // Build complete WebSocket URL with exercise path parameter and user_id query
     let wsUrl;
     if (exercise) {
       // Normalize exercise name (lowercase, spaces to hyphens)
-      wsUrl = `wss://araise-backend-code.onrender.com/ws/${exercise}?user_id=${userId}`;
+      wsUrl = `${wsProtocol}://${wsHost}/ws/${exercise}?user_id=${userId}`;
       this.currentExercise = exercise;
       console.log('🔗 Connecting to WebSocket URL:', wsUrl);
       console.log('🏃 Exercise:', exercise, '→', exercise);
       console.log('👤 User ID:', userId);
+      console.log('🌍 Environment:', isDevelopment ? 'Development' : 'Production');
     } else {
       // Fallback to generic endpoint
-      wsUrl = `${wsBaseUrl}/ws?user_id=${userId}`;
+      wsUrl = `${wsProtocol}://${wsHost}/ws?user_id=${userId}`;
       this.currentExercise = null;
       console.log('🔗 Connecting to generic WebSocket URL:', wsUrl);
       console.log('👤 User ID:', userId);
+      console.log('🌍 Environment:', isDevelopment ? 'Development' : 'Production');
     }
 
     try {
       this.ws = new WebSocket(wsUrl);
       
       this.ws.onopen = () => {
-        console.log('WebSocket connected to:', wsUrl);
+        console.log('✅ WebSocket connected successfully to:', wsUrl);
         this.isConnected = true;
         this.reconnectAttempts = 0;
+        this.isReconnecting = false;
+        this.missedHeartbeats = 0;
+        
+        // Clear any pending reconnect timeout
+        if (this.reconnectTimeoutId) {
+          clearTimeout(this.reconnectTimeoutId);
+          this.reconnectTimeoutId = null;
+        }
+        
+        // Start heartbeat to keep connection alive
+        this.startHeartbeat();
+        
         this.callbacks.onConnect.forEach(callback => callback());
       };
 
@@ -66,6 +90,14 @@ class WebSocketService {
         
         try {
           const data = JSON.parse(event.data);
+          
+          // Handle pong response for heartbeat
+          if (data.type === 'pong') {
+            this.missedHeartbeats = 0;
+            console.log('💓 Heartbeat acknowledged');
+            return;
+          }
+          
           console.log('🟢 Parsed WebSocket data:', data);
           console.log('🟢 Callbacks count:', this.callbacks.onMessage.length);
           this.callbacks.onMessage.forEach((callback, index) => {
@@ -78,11 +110,22 @@ class WebSocketService {
         }
       };
 
-      this.ws.onclose = () => {
-        console.log('WebSocket disconnected');
+      this.ws.onclose = (event) => {
+        console.log('WebSocket disconnected. Code:', event.code, 'Reason:', event.reason);
         this.isConnected = false;
-        this.callbacks.onDisconnect.forEach(callback => callback());
-        this.handleReconnect(exercise, baseUrl);
+        
+        // Stop heartbeat
+        this.stopHeartbeat();
+        
+        // Only trigger disconnect callbacks if not already reconnecting
+        if (!this.isReconnecting) {
+          this.callbacks.onDisconnect.forEach(callback => callback());
+        }
+        
+        // Only attempt reconnect if it wasn't a clean closure (code 1000)
+        if (event.code !== 1000) {
+          this.handleReconnect(exercise, baseUrl);
+        }
       };
 
       this.ws.onerror = (error) => {
@@ -97,15 +140,31 @@ class WebSocketService {
   }
 
   handleReconnect(exercise, baseUrl) {
+    // Clear any existing reconnect timeout
+    if (this.reconnectTimeoutId) {
+      clearTimeout(this.reconnectTimeoutId);
+      this.reconnectTimeoutId = null;
+    }
+
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++;
-      console.log(`Attempting to reconnect... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+      this.isReconnecting = true;
       
-      setTimeout(() => {
+      // Exponential backoff: 3s, 6s, 12s, 24s, 48s (for Render.com cold starts)
+      const backoffDelay = this.reconnectInterval * Math.pow(2, this.reconnectAttempts - 1);
+      
+      console.log(`Attempting to reconnect... (${this.reconnectAttempts}/${this.maxReconnectAttempts}) in ${backoffDelay}ms`);
+      console.log('💡 Tip: Render.com free tier may take 30-60s to wake up from sleep');
+      
+      this.reconnectTimeoutId = setTimeout(() => {
         this.connect(exercise, baseUrl);
-      }, this.reconnectInterval);
+      }, backoffDelay);
     } else {
       console.log('Max reconnect attempts reached');
+      this.isReconnecting = false;
+      this.callbacks.onError.forEach(callback => 
+        callback(new Error('Max reconnect attempts reached. Backend may be sleeping or unavailable.'))
+      );
     }
   }
 
@@ -200,9 +259,54 @@ class WebSocketService {
     }
   }
 
+  startHeartbeat() {
+    // Clear any existing heartbeat
+    this.stopHeartbeat();
+    
+    this.heartbeatIntervalId = setInterval(() => {
+      if (this.isConnected && this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.missedHeartbeats++;
+        
+        if (this.missedHeartbeats >= this.maxMissedHeartbeats) {
+          console.warn('💔 Too many missed heartbeats, connection may be dead');
+          this.ws.close();
+          return;
+        }
+        
+        try {
+          // Send ping
+          this.ws.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
+          console.log('💓 Heartbeat ping sent');
+        } catch (error) {
+          console.error('Error sending heartbeat:', error);
+        }
+      }
+    }, this.heartbeatInterval);
+  }
+
+  stopHeartbeat() {
+    if (this.heartbeatIntervalId) {
+      clearInterval(this.heartbeatIntervalId);
+      this.heartbeatIntervalId = null;
+    }
+    this.missedHeartbeats = 0;
+  }
+
   disconnect() {
+    // Clear reconnect timeout
+    if (this.reconnectTimeoutId) {
+      clearTimeout(this.reconnectTimeoutId);
+      this.reconnectTimeoutId = null;
+    }
+    
+    // Stop heartbeat
+    this.stopHeartbeat();
+    
+    this.reconnectAttempts = 0;
+    this.isReconnecting = false;
+    
     if (this.ws) {
-      this.ws.close();
+      this.ws.close(1000, 'Client disconnect'); // Clean closure
       this.ws = null;
       this.isConnected = false;
       this.currentExercise = null;
