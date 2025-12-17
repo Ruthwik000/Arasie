@@ -1,3 +1,5 @@
+import { auth } from '../config/firebase';
+
 class WebSocketService {
   constructor() {
     this.ws = null;
@@ -15,24 +17,36 @@ class WebSocketService {
   }
 
   connect(exercise = null, baseUrl = null) {
+    // Get current user's UID from Firebase Auth
+    const currentUser = auth.currentUser;
+    const userId = currentUser?.uid;
+
+    if (!userId) {
+      console.error('❌ Cannot connect to WebSocket: User not authenticated');
+      this.callbacks.onError.forEach(callback => 
+        callback(new Error('User not authenticated'))
+      );
+      return;
+    }
+
     // Determine base WebSocket URL
-    const defaultBaseUrl = import.meta.env.VITE_WS_BASE_URL;
     const wsBaseUrl = "`wss://araise-backend-code.onrender.com"
     
-    // Build complete WebSocket URL with exercise path parameter
+    // Build complete WebSocket URL with exercise path parameter and user_id query
     let wsUrl;
     if (exercise) {
       // Normalize exercise name (lowercase, spaces to hyphens)
-      const normalizedExercise = exercise.toLowerCase().replace("-","");
-      wsUrl = `wss://araise-backend-code.onrender.com/ws/${normalizedExercise}`;
-      this.currentExercise = normalizedExercise;
+      wsUrl = `wss://araise-backend-code.onrender.com/ws/${exercise}?user_id=${userId}`;
+      this.currentExercise = exercise;
       console.log('🔗 Connecting to WebSocket URL:', wsUrl);
-      console.log('🏃 Exercise:', exercise, '→', normalizedExercise);
+      console.log('🏃 Exercise:', exercise, '→', exercise);
+      console.log('👤 User ID:', userId);
     } else {
       // Fallback to generic endpoint
-      wsUrl = `${wsBaseUrl}/ws`;
+      wsUrl = `${wsBaseUrl}/ws?user_id=${userId}`;
       this.currentExercise = null;
       console.log('🔗 Connecting to generic WebSocket URL:', wsUrl);
+      console.log('👤 User ID:', userId);
     }
 
     try {
