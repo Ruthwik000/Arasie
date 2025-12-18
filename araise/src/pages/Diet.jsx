@@ -109,20 +109,43 @@ export default function Diet() {
       }
 
       const formData = new FormData()
-      formData.append('file', imageFile) // Changed from 'image' to 'file'
+      formData.append('file', imageFile)
+      formData.append('deep_search', 'true') // Enable deep search for better accuracy
 
-      const response = await fetch('https://food-45609451577.asia-south1.run.app/analyze-food', {
-        method: 'POST',
-        body: formData
+      // Use environment variable or detect local/production backend
+      const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+      const defaultUrl = isDevelopment 
+        ? 'http://localhost:8000' 
+        : 'https://food-45609451577.asia-south1.run.app'
+      
+      const apiBaseUrl = import.meta.env.VITE_FOOD_API_BASE_URL || defaultUrl
+      const fullUrl = `${apiBaseUrl}/api/v1/food/analyze`
+      
+      console.log('🍔 Attempting to analyze food at:', fullUrl)
+      console.log('📦 FormData contents:', {
+        file: imageFile.name,
+        type: imageFile.type,
+        size: imageFile.size,
+        deep_search: 'true'
       })
+
+      const response = await fetch(fullUrl, {
+        method: 'POST',
+        body: formData,
+        mode: 'cors', // Explicitly enable CORS
+      })
+
+      console.log('📡 Response status:', response.status)
+      console.log('📡 Response ok:', response.ok)
 
       if (!response.ok) {
         let errorMessage = 'An error occurred while analyzing the image'
         try {
           const error = await response.json()
-          errorMessage = error.detail || response.statusText
+          console.error('❌ Error response:', error)
+          errorMessage = error.detail || error.message || response.statusText
         } catch {
-          errorMessage = response.statusText
+          errorMessage = `HTTP ${response.status}: ${response.statusText}`
         }
         throw new Error(errorMessage)
       }
@@ -130,20 +153,54 @@ export default function Diet() {
       const data = await response.json()
       console.log('Food analysis result:', data)
 
-      // Extract required data from API response
+      // Extract the first item from items array (main detected food)
+      const primaryItem = data.items && data.items.length > 0 ? data.items[0] : null
+      
+      if (!primaryItem) {
+        throw new Error('No food items detected in the image')
+      }
+
+      // Parse nutrition values (remove units and convert to numbers)
+      const parseNutrition = (value) => {
+        if (!value) return 0
+        const numValue = parseFloat(value.toString().replace(/[^0-9.]/g, ''))
+        return isNaN(numValue) ? 0 : Math.round(numValue)
+      }
+
+      // Extract required data from the new API response structure
       const foodData = {
-        name: data.food_identification?.primary_dish || 'Unknown Food',
-        calories: Math.round(data.macronutrients?.calories || 0),
-        protein: Math.round(data.macronutrients?.protein || 0),
-        carbohydrates: Math.round(data.macronutrients?.carbohydrates || 0),
-        fat: Math.round(data.macronutrients?.fat || 0)
+        name: primaryItem.name || 'Unknown Food',
+        calories: parseNutrition(primaryItem.nutrition?.calories),
+        protein: parseNutrition(primaryItem.nutrition?.protein),
+        carbohydrates: parseNutrition(primaryItem.nutrition?.carbs),
+        fat: parseNutrition(primaryItem.nutrition?.fats),
+        confidence: primaryItem.confidence || 0,
+        description: primaryItem.description || '',
+        healthScore: data.health_score || 0,
+        totalCalories: parseNutrition(data.total_calories_estimate),
+        dietaryWarnings: data.dietary_warnings || [],
+        overallDescription: data.overall_description || '',
+        allItems: data.items || []
       }
 
       setScanResults(foodData)
       setShowScanResults(true)
     } catch (error) {
-      console.error('Food scanning error:', error)
-      alert(`Failed to analyze food: ${error.message}`)
+      console.error('❌ Food scanning error:', error)
+      
+      // Provide more helpful error messages
+      let userMessage = error.message
+      if (error.message.includes('Failed to fetch')) {
+        userMessage = `Cannot connect to food analysis service. Please check:\n\n` +
+          `1. Your internet connection\n` +
+          `2. Backend service is running at: ${import.meta.env.VITE_FOOD_API_BASE_URL || 'https://food-45609451577.asia-south1.run.app'}\n` +
+          `3. CORS is enabled on the backend\n\n` +
+          `Technical error: ${error.message}`
+      } else if (error.message.includes('NetworkError')) {
+        userMessage = 'Network error. Please check your internet connection and try again.'
+      }
+      
+      alert(`Failed to analyze food:\n\n${userMessage}`)
       resetScanStates()
     } finally {
       setIsScanning(false)
@@ -652,15 +709,55 @@ export default function Diet() {
             </div>
 
             <div className="space-y-4">
-              {/* Food Name */}
+              {/* Food Name with Confidence */}
               <div className="text-center p-4 bg-ar-dark-gray/30 rounded-xl">
                 <h3 className="text-xl font-bold text-ar-white mb-2">
                   {scanResults.name}
                 </h3>
+                {scanResults.confidence && (
+                  <div className="text-xs text-ar-gray mb-2">
+                    Confidence: {Math.round(scanResults.confidence * 100)}%
+                  </div>
+                )}
                 <div className="text-3xl font-bold text-ar-orange">
                   {scanResults.calories} cal
                 </div>
               </div>
+
+              {/* Overall Description */}
+              {scanResults.overallDescription && (
+                <div className="p-3 bg-ar-dark-gray/20 rounded-xl">
+                  <p className="text-sm text-ar-gray-300">
+                    {scanResults.overallDescription}
+                  </p>
+                </div>
+              )}
+
+              {/* Health Score */}
+              {scanResults.healthScore > 0 && (
+                <div className="flex items-center justify-between p-3 bg-ar-dark-gray/20 rounded-xl">
+                  <span className="text-sm text-ar-gray">Health Score</span>
+                  <div className="flex items-center gap-2">
+                    <div className="text-lg font-bold text-ar-green">
+                      {scanResults.healthScore}/10
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Dietary Warnings */}
+              {scanResults.dietaryWarnings && scanResults.dietaryWarnings.length > 0 && (
+                <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl">
+                  <div className="text-sm font-semibold text-red-400 mb-2">⚠️ Dietary Warnings:</div>
+                  <div className="flex flex-wrap gap-2">
+                    {scanResults.dietaryWarnings.map((warning, idx) => (
+                      <span key={idx} className="text-xs px-2 py-1 bg-red-500/20 text-red-300 rounded-full">
+                        {warning}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Nutritional Info */}
               <div className="grid grid-cols-3 gap-4">
@@ -685,6 +782,16 @@ export default function Diet() {
                   <div className="text-sm text-ar-gray">Fat</div>
                 </div>
               </div>
+
+              {/* Description/Visual Reasoning */}
+              {scanResults.description && (
+                <div className="p-3 bg-ar-dark-gray/20 rounded-xl">
+                  <div className="text-xs font-semibold text-ar-gray mb-1">Analysis:</div>
+                  <p className="text-xs text-ar-gray-300">
+                    {scanResults.description}
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-4 mt-6">
