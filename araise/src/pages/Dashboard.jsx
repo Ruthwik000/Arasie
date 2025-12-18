@@ -92,7 +92,7 @@ export default function Dashboard() {
     return Math.min((totalMinutes / goalMinutes) * 100, 100)
   }
 
-  // Calculate partial workout progress from in-progress session
+  // Calculate partial workout progress from in-progress session based on sets and reps
   const calculateWorkoutProgress = () => {
     const today = new Date().toISOString().slice(0, 10)
     const state = useUserStore.getState()
@@ -115,19 +115,38 @@ export default function Dashboard() {
     // Then check for exited workouts with partial progress
     const exitedWorkout = todaysWorkouts.find(w => w.status === "exited")
     if (exitedWorkout) {
-      // Try to get progress from summary
+      // First try to use summary data if available (most accurate)
+      if (exitedWorkout.summary && exitedWorkout.summary.totalSets > 0 && exitedWorkout.summary.completedSets !== undefined) {
+        const { totalSets, completedSets } = exitedWorkout.summary
+        return Math.round((completedSets / totalSets) * 100)
+      }
+      
+      // Calculate progress based on sets and reps from exercises array
+      if (exitedWorkout.exercises && Array.isArray(exitedWorkout.exercises)) {
+        let totalSets = 0
+        let completedSets = 0
+        
+        exitedWorkout.exercises.forEach(exercise => {
+          if (exercise.sets) {
+            const targetSets = parseInt(exercise.sets) || 0
+            totalSets += targetSets
+            completedSets += exercise.completedSets || 0
+          } else {
+            // For non-set based exercises (cardio, stretching), count as 1 unit
+            totalSets += 1
+            completedSets += exercise.completed ? 1 : 0
+          }
+        })
+        
+        if (totalSets > 0) {
+          return Math.round((completedSets / totalSets) * 100)
+        }
+      }
+      
+      // Fallback: Try to get progress from summary (old format)
       if (exitedWorkout.summary && exitedWorkout.summary.totalExercises > 0) {
         const { totalExercises, completedExercises } = exitedWorkout.summary
         return Math.round((completedExercises / totalExercises) * 100)
-      }
-      
-      // Fallback: calculate from exercises array
-      if (exitedWorkout.exercises && Array.isArray(exitedWorkout.exercises)) {
-        const totalExercises = exitedWorkout.totalExercises || exitedWorkout.exercises.length
-        const completedExercises = exitedWorkout.exercises.filter(ex => ex.completed).length
-        if (totalExercises > 0) {
-          return Math.round((completedExercises / totalExercises) * 100)
-        }
       }
     }
     
@@ -146,10 +165,23 @@ export default function Dashboard() {
     // Check for in-progress workout
     const inProgressWorkout = state.currentWorkoutSession
     if (inProgressWorkout && inProgressWorkout.exercises) {
-      const totalExercises = inProgressWorkout.exercises.length
-      const completedExercises = inProgressWorkout.exercises.filter(ex => ex.completed).length
-      if (totalExercises > 0) {
-        const partialProgress = (completedExercises / totalExercises) * 100
+      let totalSets = 0
+      let completedSets = 0
+      
+      inProgressWorkout.exercises.forEach(exercise => {
+        if (exercise.sets) {
+          const targetSets = parseInt(exercise.sets) || 0
+          totalSets += targetSets
+          completedSets += exercise.completedSets || 0
+        } else {
+          // For non-set based exercises (cardio, stretching), count as 1 unit
+          totalSets += 1
+          completedSets += exercise.completed ? 1 : 0
+        }
+      })
+      
+      if (totalSets > 0) {
+        const partialProgress = (completedSets / totalSets) * 100
         return Math.min(partialProgress, 99) // Cap at 99% until fully completed
       }
     }
