@@ -35,9 +35,7 @@
 
 ---
 
-## 📸 **Feature Screenshots**
 
-<div align="center">
 
 ### 🏠 **Enhanced Dashboard Overview**
 
