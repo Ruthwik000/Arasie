@@ -241,41 +241,50 @@ export class FirebaseUserService {
     }
 
     const today = new Date().toISOString().slice(0, 10);
-    const planName = workoutSessionData.planName || "Workout Session";
 
-    // Create workout object with real session data - clean undefined values
+    // Calculate totals for summary
+    const totalSets = workoutSessionData.exercises.reduce((sum, ex) => 
+      sum + (parseInt(ex.sets) || 0), 0
+    );
+    const completedSets = workoutSessionData.exercises.reduce((sum, ex) => 
+      sum + (ex.completedSets || 0), 0
+    );
+
+    // Create workout object with complete schema
     const workout = {
-      id: Date.now(),
+      id: workoutSessionData.id || Date.now(),
+      planName: workoutSessionData.planName || "Workout Session",
+      planId: workoutSessionData.planId,
+      dayId: workoutSessionData.dayId,
+      category: workoutSessionData.category,
       type: workoutSessionData.type || "split",
-      planName: planName,
+      status: workoutSessionData.status || "completed",
       date: workoutSessionData.date || today,
+      startTime: workoutSessionData.startTime,
+      endTime: workoutSessionData.endTime,
       duration: workoutSessionData.duration || 30,
-      completed: true,
       
-      // Real exercise data with actual performance
+      // Exercise data with target sets/reps (not completed values)
       exercises: workoutSessionData.exercises.map(exercise => ({
-        exerciseName: exercise.exerciseName || "Exercise",
-        sets: exercise.completedSets || exercise.sets || 3,
-        reps: exercise.completedReps || exercise.reps || 12,
-        weight: exercise.actualWeight || exercise.weight || 0,
-        completed: exercise.completed !== false,
+        exerciseName: exercise.exerciseName || exercise.name || "Exercise",
+        sets: parseInt(exercise.sets) || 3,  // Target sets
+        reps: parseInt(exercise.reps) || 12,  // Target reps
+        weight: exercise.weight || 0,
+        completed: exercise.completed || false,
         completedSets: exercise.completedSets || 0,
-        setProgress: exercise.setProgress || {}  // Preserve detailed set progress with actual reps
+        setProgress: exercise.setProgress || {}
       })),
       
-      // Session summary
-      totalExercises: workoutSessionData.exercises.length,
-      completedExercises: workoutSessionData.exercises.filter(ex => ex.completed !== false).length,
-      totalSets: workoutSessionData.exercises.reduce((sum, ex) => sum + (ex.completedSets || ex.sets || 0), 0)
+      // Summary with completedSets for accurate progress calculation
+      summary: {
+        totalExercises: workoutSessionData.exercises.length,
+        completedExercises: workoutSessionData.exercises.filter(ex => ex.completed).length,
+        totalSets: totalSets,
+        completedSets: completedSets
+      }
     };
 
-    // Add optional fields only if they have values (not undefined)
-    if (workoutSessionData.planId) workout.planId = workoutSessionData.planId;
-    if (workoutSessionData.dayId) workout.dayId = workoutSessionData.dayId;
-    if (workoutSessionData.category) workout.category = workoutSessionData.category;
-    if (workoutSessionData.status) workout.status = workoutSessionData.status;
-    if (workoutSessionData.startTime) workout.startTime = workoutSessionData.startTime;
-    if (workoutSessionData.endTime) workout.endTime = workoutSessionData.endTime;
+    // Add optional fields only if they have values
     if (workoutSessionData.totalVolume) workout.totalVolume = workoutSessionData.totalVolume;
     if (workoutSessionData.totalDistance) workout.totalDistance = workoutSessionData.totalDistance;
     if (workoutSessionData.totalCalories) workout.totalCalories = workoutSessionData.totalCalories;
@@ -340,27 +349,43 @@ export class FirebaseUserService {
 
   // Save cardio workout
   async saveCardioWorkout(cardioData, currentHistory) {
+    const exercises = (cardioData.exercises || [{
+      exerciseName: cardioData.exerciseType || "Cardio",
+      duration: cardioData.duration,
+      distance: cardioData.distance,
+      speed: cardioData.speed,
+      calories: cardioData.calories
+    }]).map(ex => ({
+      ...ex,
+      sets: 1,  // Cardio counts as 1 set
+      completed: true,
+      completedSets: 1,
+      setProgress: { "0": { completed: true } }
+    }));
+
     const workout = {
       id: Date.now(),
-      type: "cardio",
       planName: cardioData.name || "Cardio Session",
-      
+      type: "cardio",
+      category: "cardio",
+      status: "completed",
       date: new Date().toISOString().slice(0, 10),
+      startTime: cardioData.startTime || new Date().toISOString(),
+      endTime: cardioData.endTime || new Date().toISOString(),
       duration: cardioData.duration || 30,
       
-      exercises: cardioData.exercises || [{
-        exerciseName: cardioData.exerciseType || "Cardio",
-        duration: cardioData.duration,
-        distance: cardioData.distance,
-        speed: cardioData.speed,
-        calories: cardioData.calories
-      }],
+      exercises: exercises,
+      
+      summary: {
+        totalExercises: exercises.length,
+        completedExercises: exercises.length,
+        totalSets: exercises.length,
+        completedSets: exercises.length
+      },
       
       totalDistance: cardioData.distance,
       totalCalories: cardioData.calories,
-      avgHeartRate: cardioData.heartRate,
-      
-      completed: true
+      avgHeartRate: cardioData.heartRate
     };
 
     const newHistory = [...currentHistory, workout];

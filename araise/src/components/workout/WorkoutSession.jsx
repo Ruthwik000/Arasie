@@ -444,7 +444,7 @@ export default function WorkoutSession() {
   }
 
   const handleExitConfirm = async () => {
-    // Save as COMPLETED workout (not in-progress) with only completed exercises
+    // Save workout with proper status based on completion
     if (currentWorkoutSession) {
       setIsSaving(true)
       try {
@@ -453,38 +453,56 @@ export default function WorkoutSession() {
           ex.completed || (ex.completedSets && ex.completedSets > 0)
         )
         
-        // Edge case: If no exercises completed, still save with empty array to track attempt
+        // Check if ALL sets across ALL exercises are completed
+        let totalSetsRequired = 0
+        let totalSetsCompleted = 0
+        
+        currentWorkoutSession.exercises.forEach(exercise => {
+          if (exercise.sets) {
+            const targetSets = parseInt(exercise.sets) || 0
+            totalSetsRequired += targetSets
+            totalSetsCompleted += exercise.completedSets || 0
+          } else {
+            // For non-set based exercises (cardio, stretching), count as 1 unit
+            totalSetsRequired += 1
+            totalSetsCompleted += exercise.completed ? 1 : 0
+          }
+        })
+        
+        // Determine if workout is fully completed
+        const isFullyCompleted = totalSetsRequired > 0 && totalSetsCompleted >= totalSetsRequired
         
         // Calculate workout duration
         const startTime = new Date(currentWorkoutSession.startTime)
         const endTime = new Date()
         const duration = Math.round((endTime - startTime) / 60000) // minutes
         
-        // Create exited workout data
-        const exitedWorkoutData = {
+        // Create workout data with appropriate status
+        const workoutData = {
           id: currentWorkoutSession.id,
           planName: currentWorkoutSession.planName,
           planId: currentWorkoutSession.planId,
           dayId: currentWorkoutSession.dayId,
           category: category,
           type: currentWorkoutSession.type,
-          status: "exited", // Mark as exited (not completed)
-          date: new Date(currentWorkoutSession.startTime).toISOString().slice(0, 10), // Add date field
+          status: isFullyCompleted ? "completed" : "exited", // Mark as completed if all sets done
+          date: new Date(currentWorkoutSession.startTime).toISOString().slice(0, 10),
           startTime: currentWorkoutSession.startTime,
           endTime: endTime.toISOString(),
           duration: duration,
-          exercises: completedExercises, // Only completed exercises
+          exercises: currentWorkoutSession.exercises, // Save ALL exercises with their completion status
           summary: {
             totalExercises: currentWorkoutSession.exercises.length,
             completedExercises: completedExercises.length,
-            totalSets: completedExercises.reduce((sum, ex) => sum + (ex.sets || 0), 0)
+            totalSets: totalSetsRequired, // Total sets in the workout
+            completedSets: totalSetsCompleted // Sets actually completed
           }
         }
         
-        // Save as exited workout
-        await saveWorkoutSession(exitedWorkoutData)
+        // Save workout
+        await saveWorkoutSession(workoutData)
       } catch (error) {
-        console.error('Error saving completed workout:', error)
+        console.error('Error saving workout:', error)
         alert('Failed to save workout. Please try again.')
       } finally {
         setIsSaving(false)
