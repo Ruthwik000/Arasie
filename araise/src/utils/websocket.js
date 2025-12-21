@@ -34,13 +34,8 @@ class WebSocketService {
       );
       return;
     }
-
-    // Determine WebSocket URL based on environment
-    const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    const wsProtocol = isDevelopment ? 'ws' : 'wss';
-    const wsHost = isDevelopment 
-      ? 'localhost:8000' 
-      : (import.meta.env.VITE_WS_HOST || 'araise-backend-code.onrender.com');
+    const wsProtocol = 'wss'
+    const wsHost = 'araise-backend-code.onrender.com'
     
     // Build complete WebSocket URL with exercise path parameter and user_id query
     let wsUrl;
@@ -51,14 +46,12 @@ class WebSocketService {
       console.log('🔗 Connecting to WebSocket URL:', wsUrl);
       console.log('🏃 Exercise:', exercise, '→', exercise);
       console.log('👤 User ID:', userId);
-      console.log('🌍 Environment:', isDevelopment ? 'Development' : 'Production');
     } else {
       // Fallback to generic endpoint
       wsUrl = `${wsProtocol}://${wsHost}/ws?user_id=${userId}`;
       this.currentExercise = null;
       console.log('🔗 Connecting to generic WebSocket URL:', wsUrl);
       console.log('👤 User ID:', userId);
-      console.log('🌍 Environment:', isDevelopment ? 'Development' : 'Production');
     }
 
     try {
