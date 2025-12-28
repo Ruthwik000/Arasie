@@ -137,11 +137,14 @@ export default function LiveSession({
         .filter(phase => phase.type === 'focus')
         .reduce((total, phase) => total + Math.floor(phase.duration / 60), 0)
       
-      onComplete({
+      const sessionResult = {
         duration: focusMinutes,
         task: sessionData.name,
         completed: true
-      })
+      };
+      
+      console.log('[LiveSession] 🏁 Session completed! Calling onComplete with:', sessionResult);
+      onComplete(sessionResult);
     } else {
       // Move to next phase
       const nextPhaseIndex = currentPhaseIndex + 1
@@ -172,11 +175,14 @@ export default function LiveSession({
           .filter(phase => phase.type === 'focus')
           .reduce((total, phase) => total + Math.floor(phase.duration / 60), 0)
         
-        onComplete({
+        const sessionResult = {
           duration: focusMinutes,
           task: sessionData.name,
           completed: true
-        })
+        };
+        
+        console.log('[LiveSession] ⏭️ Skipped to end! Calling onComplete with:', sessionResult);
+        onComplete(sessionResult);
       } else {
         // Skip to next phase
         const nextPhaseIndex = currentPhaseIndex + 1
@@ -211,13 +217,17 @@ export default function LiveSession({
     
     // If user spent any time focusing, record it as a partial session
     if (totalTimeSpentMinutes > 0) {
-      onComplete({
+      const sessionResult = {
         duration: totalTimeSpentMinutes,
         task: sessionData.name,
         completed: false // Mark as incomplete since user ended early
-      })
+      };
+      
+      console.log('[LiveSession] 🛑 Session ended early! Calling onComplete with:', sessionResult);
+      onComplete(sessionResult);
     } else {
-      onEnd?.()
+      console.log('[LiveSession] 🛑 Session ended with no focus time, calling onEnd');
+      onEnd?.();
     }
   }
 

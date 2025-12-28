@@ -1,5 +1,5 @@
-const CACHE_NAME = 'araise-v4'
-const RUNTIME_CACHE = 'araise-runtime-v4'
+const CACHE_NAME = 'araise-v5'
+const RUNTIME_CACHE = 'araise-runtime-v5'
 const isDevelopment = self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1'
 
 // Install event - skip waiting to activate immediately
@@ -14,6 +14,11 @@ self.addEventListener('install', event => {
 self.addEventListener('fetch', event => {
   // In development, skip service worker caching entirely
   if (isDevelopment) {
+    return
+  }
+  
+  // Skip POST, PUT, DELETE requests - only cache GET requests
+  if (event.request.method !== 'GET') {
     return
   }
   

@@ -35,6 +35,8 @@ export default function Focus() {
     completedBreaks: 0
   })
   const [nextSuggestion, setNextSuggestion] = useState(null)
+  const [tasksKey, setTasksKey] = useState(0) // Force re-render when tasks change
+  const [forceRefresh, setForceRefresh] = useState(0) // Additional force refresh trigger
   
   const navigate = useNavigate()
   const { 
@@ -44,12 +46,47 @@ export default function Focus() {
     saveFocusTask, 
     updateFocusTaskProgress, 
     addFocusTaskReflection,
-    focusTasks = [],
     dailyFocusGoal = 60,
-    setFocusSubSection
+    setFocusSubSection,
+    loadFocusTasks
   } = useUserStore()
+  
+  // Use a separate selector for focusTasks to ensure reactivity
+  const focusTasks = useUserStore((state) => state.focusTasks || [])
 
   const { xp, level, streakDays, awardXp, touchStreak, checkAndResetDaily, getDailyProgress } = useXpStore()
+
+  // TEST FUNCTION - Remove after debugging
+  const testFocusSessionSave = async () => {
+    console.log('🧪 Testing focus session save...');
+    try {
+      await logFocusSession(25, 'Test Pomodoro Session', true);
+      console.log('🧪 Test focus session saved successfully');
+    } catch (error) {
+      console.error('🧪 Test focus session failed:', error);
+    }
+  };
+
+  // Load focus tasks on component mount
+  useEffect(() => {
+    const loadTasks = async () => {
+      try {
+        console.log('[Focus] Loading focus tasks...')
+        await loadFocusTasks()
+        console.log('[Focus] Focus tasks loaded')
+      } catch (error) {
+        console.error('[Focus] Error loading focus tasks:', error)
+      }
+    }
+    loadTasks()
+  }, [loadFocusTasks])
+
+  // Force re-render when focusTasks changes
+  useEffect(() => {
+    console.log('[Focus] focusTasks changed, count:', focusTasks.length)
+    console.log('[Focus] focusTasks array:', focusTasks)
+    setTasksKey(prev => prev + 1)
+  }, [focusTasks])
 
   // Check and reset daily XP on component mount and every minute
   useEffect(() => {
@@ -206,56 +243,41 @@ export default function Focus() {
   }
 
               const handleSessionComplete = async (sessionResult) => {
-    // Only log to focusLogs if this is NOT a custom task (to avoid double counting)
-    if (!currentSession?.taskId && typeof logFocusSession === 'function') {
-      await logFocusSession(sessionResult.duration, sessionResult.task, sessionResult.completed)
+    console.log('[Focus] 🎯 handleSessionComplete called with:', sessionResult);
+    console.log('[Focus] currentSession:', currentSession);
+    console.log('[Focus] sessionResult type:', typeof sessionResult);
+    console.log('[Focus] sessionResult keys:', Object.keys(sessionResult || {}));
+    
+    // ALWAYS log focus sessions to activities.focus (for progress tracking)
+    if (typeof logFocusSession === 'function' && sessionResult?.duration > 0) {
+      console.log('[Focus] 📝 Logging focus session to activities.focus');
+      console.log('[Focus] Calling logFocusSession with:', {
+        duration: sessionResult.duration,
+        task: sessionResult.task,
+        completed: sessionResult.completed
+      });
+      await logFocusSession(sessionResult.duration, sessionResult.task, sessionResult.completed);
+    } else {
+      console.log('[Focus] ❌ NOT logging focus session because:', {
+        logFocusSessionExists: typeof logFocusSession === 'function',
+        duration: sessionResult?.duration,
+        durationValid: sessionResult?.duration > 0
+      });
     }
     
-    // Update custom task progress if this was a custom task and any time was spent
-    if (currentSession?.taskId && sessionResult.duration > 0 && typeof updateFocusTaskProgress === 'function') {
+    // ALSO update custom task progress if this was linked to a task
+    if (currentSession?.taskId && sessionResult?.duration > 0 && typeof updateFocusTaskProgress === 'function') {
       try {
-        await updateFocusTaskProgress(currentSession.taskId, sessionResult.duration)
+        console.log('[Focus] 📋 Updating task progress for taskId:', currentSession.taskId);
+        await updateFocusTaskProgress(currentSession.taskId, sessionResult.duration);
       } catch (error) {
-        console.error('Error updating task progress:', error)
+        console.error('Error updating task progress:', error);
       }
     }
-    
-                // If session completed and linked to a task, mark task done in local task store
-                if (sessionResult.completed && currentSession?.taskId) {
-                  try {
-                    // Mark the focus task as completed by updating its progress
-                    await updateFocusTaskProgress(currentSession.taskId, sessionResult.duration)
-                  } catch (err) {
-                    console.error('Failed to auto-complete task after session:', err)
-                  }
-                }
 
     // Update focus progress (include both completed and partial sessions)
     if (typeof updateFocusProgress === 'function' && sessionResult.duration > 0) {
-      const today = new Date().toISOString().slice(0, 10)
-      
-      // Get today's focus log sessions (pomodoro sessions only)
-      const todaysFocusLogSessions = focusLogs.filter(log => 
-        log.time && log.time.slice(0, 10) === today
-      )
-      const focusLogMinutes = todaysFocusLogSessions.reduce((total, session) => total + session.duration, 0)
-      
-      // Get today's completed tasks (custom tasks only)
-      const todaysCompletedTasks = focusTasks.filter(task => 
-        task.date === today && task.status === 'completed'
-      )
-      const taskMinutes = todaysCompletedTasks.reduce((total, task) => total + (task.completed || task.planned || 0), 0)
-      
-      // Add current session minutes (don't double count)
-      let totalMinutes = focusLogMinutes + taskMinutes
-      if (!currentSession?.taskId) {
-        // This is a pomodoro session, add to focus log minutes
-        totalMinutes += sessionResult.duration
-      }
-      // Custom task minutes are already included via updateFocusTaskProgress
-      
-      // Get daily focus goal and calculate progress
-      await updateFocusProgress(Math.min((totalMinutes / dailyFocusGoal) * 100, 100))
+      await updateFocusProgress()
     }
     
     // Only show completion flow if session was actually completed
@@ -311,24 +333,7 @@ export default function Focus() {
           
           // Also update overall focus progress
           if (typeof updateFocusProgress === 'function') {
-            const today = new Date().toISOString().slice(0, 10)
-            
-            // Get today's focus log sessions (pomodoro sessions only)
-            const todaysFocusLogSessions = focusLogs.filter(log => 
-              log.time && log.time.slice(0, 10) === today
-            )
-            const focusLogMinutes = todaysFocusLogSessions.reduce((total, session) => total + session.duration, 0)
-            
-            // Get today's completed tasks (custom tasks only) 
-            const todaysCompletedTasks = focusTasks.filter(task => 
-              task.date === today && task.status === 'completed'
-            )
-            const taskMinutes = todaysCompletedTasks.reduce((total, task) => total + (task.completed || task.planned || 0), 0)
-            
-            // Add current progress (this is a custom task session)
-            const totalMinutes = focusLogMinutes + taskMinutes + progressToAdd
-            // Get daily focus goal and calculate progress
-            await updateFocusProgress(Math.min((totalMinutes / dailyFocusGoal) * 100, 100))
+            await updateFocusProgress()
           }
           
           setLastProgressUpdate(minutesSpent)
@@ -357,83 +362,42 @@ export default function Focus() {
     setActiveView('session')
   }
 
-  const handleFocusSessionEnd = (sessionResult) => {
-    // Handle session completion
-    if (sessionResult.completed) {
-      // Award XP based on session duration
-      const totalMinutes = sessionResult.duration
-      const xpEarned = Math.round(totalMinutes / 5) // 5 minutes = 1 XP base
-      const boostedXp = totalMinutes >= 60 ? Math.round(xpEarned * 1.2) : xpEarned // 20% boost for sessions 60+ min
-      
-      awardXp(boostedXp, dailyFocusGoal)
-      
-      // Log the completed session
-      if (typeof logFocusSession === 'function') {
-        logFocusSession(totalMinutes, sessionResult.name || 'Focus Session', true)
-      }
-      
-      // Update focus progress
-      if (typeof updateFocusProgress === 'function') {
-        const today = new Date().toISOString().slice(0, 10)
-        
-        // Get today's focus log sessions
-        const todaysFocusLogSessions = focusLogs.filter(log => 
-          log.time && log.time.slice(0, 10) === today
-        )
-        const focusLogMinutes = todaysFocusLogSessions.reduce((total, session) => total + session.duration, 0)
-        
-        // Get today's completed tasks
-        const todaysCompletedTasks = focusTasks.filter(task => 
-          task.date === today && task.status === 'completed'
-        )
-        const taskMinutes = todaysCompletedTasks.reduce((total, task) => {
-          if (task.startTime && task.endTime) {
-            const startAt = new Date(`${task.date}T${task.startTime}:00`).getTime()
-            const endAt = new Date(`${task.date}T${task.endTime}:00`).getTime()
-            return total + Math.max(0, Math.round((endAt - startAt) / 60000))
-          }
-          return total + (task.focusDuration || 25)
-        }, 0)
-        
-        // Add current session minutes
-        const totalMinutes = focusLogMinutes + taskMinutes + totalMinutes
-        // Get daily focus goal and calculate progress
-        updateFocusProgress(Math.min((totalMinutes / dailyFocusGoal) * 100, 100))
-      }
-      
-      // Show completion flow
-      setCompletionMeta({ xpGained: boostedXp, leveledUp: false })
-      setActiveView('complete')
-    } else {
-      // Session ended without completion
-      handleReturnToDashboard()
-    }
+  // This method is not used - sessions go through LiveSession → handleSessionComplete
+  const handleFocusSessionEnd = async (sessionResult) => {
+    console.log('[Focus] ⚠️ handleFocusSessionEnd called - this should not happen');
+    console.log('[Focus] Sessions should go through LiveSession → handleSessionComplete');
+    
+    // Fallback: redirect to handleSessionComplete
+    await handleSessionComplete(sessionResult);
   }
 
   // Calculate total focused time today (including completed tasks)
   const getTotalFocusedToday = () => {
     const today = new Date().toISOString().slice(0, 10)
     
+    console.log('[Focus] Calculating total focused time for today:', today)
+    console.log('[Focus] focusLogs:', focusLogs)
+    console.log('[Focus] focusTasks:', focusTasks)
+    
     // Get focus log sessions (pomodoro sessions)
     const todaysSessions = focusLogs.filter(log => 
       log.time && log.time.slice(0, 10) === today && log.completed
     )
-    const focusLogMinutes = todaysSessions.reduce((total, session) => total + session.duration, 0)
+    const focusLogMinutes = todaysSessions.reduce((total, session) => total + (session.duration || 0), 0)
+    console.log('[Focus] Focus log minutes:', focusLogMinutes)
     
-    // Get completed tasks with focus mode (custom focus sessions)
-    const todaysCompletedTasks = focusTasks.filter(task => 
-      task.date === today && task.status === 'completed'
-    )
-    const taskMinutes = todaysCompletedTasks.reduce((total, task) => {
-      if (task.startTime && task.endTime) {
-        const startAt = new Date(`${task.date}T${task.startTime}:00`).getTime()
-        const endAt = new Date(`${task.date}T${task.endTime}:00`).getTime()
-        return total + Math.max(0, Math.round((endAt - startAt) / 60000))
-      }
-      return total + (task.focusDuration || 25) // fallback to focus duration
+    // Get today's tasks and sum their completed minutes
+    const todaysTasks = focusTasks.filter(task => task.date === today)
+    const taskMinutes = todaysTasks.reduce((total, task) => {
+      // Use the 'completed' field which tracks actual minutes completed
+      return total + (task.completed || 0)
     }, 0)
+    console.log('[Focus] Task minutes:', taskMinutes)
     
-    return focusLogMinutes + taskMinutes
+    const totalMinutes = focusLogMinutes + taskMinutes
+    console.log('[Focus] Total focused minutes:', totalMinutes)
+    
+    return totalMinutes
   }
 
   const getPlannedFocusGoal = () => {
@@ -496,10 +460,30 @@ export default function Focus() {
             <button onClick={() => setIsAddOpen(true)} className="flex-1 bg-ar-blue text-white rounded-lg p-2 md:p-3 text-sm md:text-base font-medium touch-manipulation">➕ Add New Task</button>
           </div>
 
-          <TimeBlockedList onStart={(task) => handleStartSession('custom', task)} />
+          <TimeBlockedList 
+            key={`${tasksKey}-${forceRefresh}-${focusTasks.length}`} 
+            onStart={(task) => handleStartSession('custom', task)} 
+          />
 
           {/* Modals */}
-          <AddTaskModal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} />
+          <AddTaskModal 
+            isOpen={isAddOpen} 
+            onClose={async () => {
+              setIsAddOpen(false)
+              // Force reload tasks after modal closes with multiple triggers
+              console.log('[Focus] Modal closed, reloading tasks...')
+              await loadFocusTasks()
+              // Force re-render by updating both keys
+              setTasksKey(prev => prev + 1)
+              setForceRefresh(prev => prev + 1)
+              console.log('[Focus] Tasks reloaded after modal close')
+            }} 
+            loadFocusTasks={async () => {
+              await loadFocusTasks()
+              setTasksKey(prev => prev + 1)
+              setForceRefresh(prev => prev + 1)
+            }} 
+          />
           {/* Calendar modal removed in favor of inline calendar (keeping import for now if used elsewhere) */}
         </div>
       )}

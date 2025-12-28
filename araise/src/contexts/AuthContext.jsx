@@ -23,7 +23,7 @@ export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Create user profile in Firestore
+  // Create user profile in Firestore (NEW SCHEMA)
   const createUserProfile = async (user, additionalData = {}) => {
     if (!user) return;
 
@@ -32,17 +32,92 @@ export const AuthProvider = ({ children }) => {
 
     if (!userDoc.exists()) {
       const { displayName, email } = user;
-      const createdAt = serverTimestamp();
+      const today = new Date().toISOString().slice(0, 10);
 
       try {
+        // Create user with NEW SCHEMA structure
         await setDoc(userRef, {
+          // User identity
+          userId: user.uid,
           displayName,
           email,
-          createdAt,
-          level: 1,
-          streakCount: 0,
+          createdAt: serverTimestamp(),
+          lastUpdated: serverTimestamp(),
+          
+          // Profile & Gamification
+          profile: {
+            level: 1,
+            xp: 0,
+            streakDays: 0,
+            lastActiveDate: null,
+            lastStreakDate: null
+          },
+          
+          // Goals
+          goals: {
+            water: { target: 3000, unit: 'ml' },
+            calories: { target: 2000, unit: 'kcal' },
+            focus: { target: 60, unit: 'minutes' },
+            workout: { target: 1, unit: 'sessions' }
+          },
+          
+          // Today's Progress
+          today: {
+            date: today,
+            lastReset: null,
+            progress: {
+              water: 0,
+              calories: 0,
+              focus: 0,
+              mentalHealth: 0
+            },
+            goalsCompleted: {
+              water: false,
+              calories: false,
+              focus: false,
+              workout: false,
+              allGoalsMet: false
+            }
+          },
+          
+          // Activities
+          activities: {
+            water: [],
+            meals: [],
+            workouts: [],
+            focus: [],
+            mentalHealth: []
+          },
+          
+          // Tasks
+          tasks: {
+            focus: []
+          },
+          
+          // Custom Content
+          custom: {
+            workouts: [],
+            journal: []
+          },
+          
+          // Historical Data
+          history: {},
+          
+          // Metadata
+          metadata: {
+            schemaVersion: '2.0',
+            lastMigration: new Date().toISOString(),
+            dataRetentionDays: 365
+          },
+          
+          // Calendar for streak tracking
+          calendar: [],
+          
+          // Additional data from signup
           ...additionalData
         });
+        
+        console.log('[AuthContext] Created new user profile with NEW SCHEMA for:', user.uid);
       } catch (error) {
         console.error('Error creating user profile:', error);
       }
