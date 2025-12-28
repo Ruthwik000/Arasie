@@ -11,34 +11,83 @@ export const useUserStore = create((set, get) => ({
       email: null,
       firebaseService: null, // Will be set when user logs in
 
-      // Gamification
-      streakCount: 0,
-      calendar: [], // [{ date: 'YYYY-MM-DD', completed: true }]
+      // NEW SCHEMA: Profile & Gamification
+      profile: {
+        level: 1,
+        xp: 0,
+        streakDays: 0,
+        lastActiveDate: null,
+        lastStreakDate: null
+      },
 
-      // Daily progress
-      waterProgress: 0, // ml
-      waterGoal: 3000, // 3L daily goal
+      // NEW SCHEMA: Goals
+      goals: {
+        water: { target: 3000, unit: 'ml' },
+        calories: { target: 2000, unit: 'kcal' },
+        focus: { target: 60, unit: 'minutes' },
+        workout: { target: 1, unit: 'sessions' }
+      },
+
+      // NEW SCHEMA: Today's Progress
+      today: {
+        date: new Date().toISOString().slice(0, 10),
+        lastReset: null,
+        progress: {
+          water: 0,
+          calories: 0,
+          focus: 0,
+          mentalHealth: 0
+        },
+        goalsCompleted: {
+          water: false,
+          calories: false,
+          focus: false,
+          workout: false,
+          allGoalsMet: false
+        }
+      },
+
+      // NEW SCHEMA: Activities
+      activities: {
+        water: [],
+        meals: [],
+        workouts: [],
+        focus: [],
+        mentalHealth: []
+      },
+
+      // NEW SCHEMA: Tasks
+      tasks: {
+        focus: []
+      },
+
+      // NEW SCHEMA: Custom Content
+      custom: {
+        workouts: [],
+        journal: []
+      },
+
+      // DEPRECATED: Keep for backward compatibility (computed from new schema)
+      streakCount: 0,
+      calendar: [],
+      waterProgress: 0,
+      waterGoal: 3000,
       dietCalories: 0,
       workoutCompleted: false,
       waterGoalMet: false,
       dietGoalMet: false,
-      mentalHealthProgress: 0, // 0-100 percentage
-      focusProgress: 0, // 0-100 percentage
-
-      // User-specific goals
-      dailyFocusGoal: 60, // minutes
-      dailyCalorieGoal: 2000, // calories
-
-      // Logs and history
-      meals: [], // [{ id, name, calories, time, macros }]
-      waterLogs: [], // [{ id, amount, time }]
-      workoutHistory: [], // [{ id, date, planId, exercises, duration }]
-      mentalHealthLogs: [], // [{ id, mood, journalEntry, time }]
-      focusLogs: [], // [{ id, duration, task, completed, time }]
-      focusTasks: [], // [{ id, name, planned, completed, status, date, created, breakType, customCycles, repeat }]
-      customWorkouts: [], // [{ id, name, goal, exercises, created, lastModified }]
-      journalEntries: [], // [{ id, content, date, mood, isAutoCreated, lastModified }]
-
+      mentalHealthProgress: 0,
+      focusProgress: 0,
+      dailyFocusGoal: 60,
+      dailyCalorieGoal: 2000,
+      meals: [],
+      waterLogs: [],
+      workoutHistory: [],
+      mentalHealthLogs: [],
+      focusLogs: [],
+      focusTasks: [],
+      customWorkouts: [],
+      journalEntries: [],
 
       // Real-time subscription
       unsubscribeFromUpdates: null,
@@ -52,12 +101,63 @@ export const useUserStore = create((set, get) => ({
       currentWorkoutSession: null,
       workoutStartTime: null,
 
+      // Helper: Sync deprecated fields from new schema (for backward compatibility)
+      syncDeprecatedFields: () => {
+        const state = get();
+        set({
+          // Sync from profile
+          level: state.profile.level,
+          streakCount: state.profile.streakDays,
+          
+          // Sync from today.progress
+          waterProgress: state.today.progress.water,
+          dietCalories: state.today.progress.calories,
+          mentalHealthProgress: state.today.progress.mentalHealth,
+          focusProgress: state.today.progress.focus,
+          
+          // Sync from today.goalsCompleted
+          workoutCompleted: state.today.goalsCompleted.workout,
+          waterGoalMet: state.today.goalsCompleted.water,
+          dietGoalMet: state.today.goalsCompleted.calories,
+          
+          // Sync from goals
+          waterGoal: state.goals.water.target,
+          dailyFocusGoal: state.goals.focus.target,
+          dailyCalorieGoal: state.goals.calories.target,
+          
+          // Sync from activities
+          waterLogs: state.activities.water,
+          meals: state.activities.meals,
+          workoutHistory: state.activities.workouts,
+          focusLogs: state.activities.focus,
+          mentalHealthLogs: state.activities.mentalHealth,
+          
+          // Sync from tasks
+          focusTasks: state.tasks.focus,
+          
+          // Sync from custom
+          customWorkouts: state.custom.workouts,
+          journalEntries: state.custom.journal
+        });
+      },
+
       // User actions
       updateName: (name) => set({ name }),
-      updateLevel: (level) => set({ level }),
+      updateLevel: (level) => {
+        set((state) => ({
+          level,
+          profile: { ...state.profile, level }
+        }));
+      },
       updateWaterGoal: async (goal) => {
         const state = get();
-        set({ waterGoal: goal });
+        set((state) => ({
+          waterGoal: goal,
+          goals: {
+            ...state.goals,
+            water: { target: goal, unit: 'ml' }
+          }
+        }));
 
         // Also update in Firebase if available
         if (state.firebaseService && state.firebaseService.updateWaterGoal) {
@@ -71,12 +171,18 @@ export const useUserStore = create((set, get) => ({
 
       updateFocusGoal: async (goal) => {
         const state = get();
-        set({ dailyFocusGoal: goal });
+        set((state) => ({
+          dailyFocusGoal: goal,
+          goals: {
+            ...state.goals,
+            focus: { target: goal, unit: 'minutes' }
+          }
+        }));
 
         // Update in Firebase if available
         if (state.firebaseService) {
           try {
-            await state.firebaseService.updateProgress('dailyFocusGoal', goal);
+            await state.firebaseService.updateFocusGoal(goal);
           } catch (error) {
             console.error('Error updating focus goal in Firebase:', error);
           }
@@ -85,14 +191,39 @@ export const useUserStore = create((set, get) => ({
 
       updateCalorieGoal: async (goal) => {
         const state = get();
-        set({ dailyCalorieGoal: goal });
+        set((state) => ({
+          dailyCalorieGoal: goal,
+          goals: {
+            ...state.goals,
+            calories: { target: goal, unit: 'kcal' }
+          }
+        }));
 
         // Update in Firebase if available
         if (state.firebaseService) {
           try {
-            await state.firebaseService.updateProgress('dailyCalorieGoal', goal);
+            await state.firebaseService.updateCalorieGoal(goal);
           } catch (error) {
             console.error('Error updating calorie goal in Firebase:', error);
+          }
+        }
+      },
+
+      updateWorkoutGoal: async (goal) => {
+        const state = get();
+        set((state) => ({
+          goals: {
+            ...state.goals,
+            workout: { target: goal, unit: 'sessions' }
+          }
+        }));
+
+        // Update in Firebase if available
+        if (state.firebaseService) {
+          try {
+            await state.firebaseService.updateWorkoutGoal(goal);
+          } catch (error) {
+            console.error('Error updating workout goal in Firebase:', error);
           }
         }
       },
@@ -121,10 +252,14 @@ export const useUserStore = create((set, get) => ({
           try {
             const progress = await firebaseService.loadUserProgress();
             set(progress);
+            
+            // Sync deprecated fields for backward compatibility
+            get().syncDeprecatedFields();
 
             // Set up real-time listener for updates
             const unsubscribe = firebaseService.subscribeToUserProgress((updates) => {
               set(updates);
+              get().syncDeprecatedFields();
             });
             set({ unsubscribeFromUpdates: unsubscribe });
 
@@ -166,10 +301,57 @@ export const useUserStore = create((set, get) => ({
           user: null,
           isAuthenticated: false,
           email: null,
-          name: null, // Clear name completely
+          name: null,
           firebaseService: null,
           unsubscribeFromUpdates: null,
-          // Reset daily progress on logout
+          
+          // Reset NEW SCHEMA fields
+          profile: {
+            level: 1,
+            xp: 0,
+            streakDays: 0,
+            lastActiveDate: null,
+            lastStreakDate: null
+          },
+          goals: {
+            water: { target: 3000, unit: 'ml' },
+            calories: { target: 2000, unit: 'kcal' },
+            focus: { target: 60, unit: 'minutes' },
+            workout: { target: 1, unit: 'sessions' }
+          },
+          today: {
+            date: new Date().toISOString().slice(0, 10),
+            lastReset: null,
+            progress: {
+              water: 0,
+              calories: 0,
+              focus: 0,
+              mentalHealth: 0
+            },
+            goalsCompleted: {
+              water: false,
+              calories: false,
+              focus: false,
+              workout: false,
+              allGoalsMet: false
+            }
+          },
+          activities: {
+            water: [],
+            meals: [],
+            workouts: [],
+            focus: [],
+            mentalHealth: []
+          },
+          tasks: {
+            focus: []
+          },
+          custom: {
+            workouts: [],
+            journal: []
+          },
+          
+          // Reset DEPRECATED fields
           waterProgress: 0,
           dietCalories: 0,
           workoutCompleted: false,
@@ -186,7 +368,8 @@ export const useUserStore = create((set, get) => ({
           streakCount: 0,
           calendar: [],
           workoutHistory: [],
-          customWorkouts: []
+          customWorkouts: [],
+          journalEntries: []
         });
       },
 
@@ -207,18 +390,23 @@ export const useUserStore = create((set, get) => ({
 
           const { newStreak, newCalendar, newLevel } = await state.firebaseService.addStreak(
             date,
-            updatedState.streakCount,
+            updatedState.profile.streakDays,
             updatedState.calendar,
-            updatedState.level
+            updatedState.profile.level
           );
 
-          set({
-            streakCount: newStreak,
-            calendar: newCalendar,
-            level: newLevel
-          });
-
-
+          set((state) => ({
+            profile: {
+              ...state.profile,
+              streakDays: newStreak,
+              level: newLevel,
+              lastActiveDate: date,
+              lastStreakDate: date
+            },
+            calendar: newCalendar
+          }));
+          
+          get().syncDeprecatedFields();
         } catch (error) {
           console.error('Error adding streak:', error);
         }
@@ -242,24 +430,37 @@ export const useUserStore = create((set, get) => ({
             // Get today's date for filtering
             const today = new Date().toISOString().slice(0, 10);
 
-            set({
-              workoutCompleted: false,
-              waterGoalMet: false,
-              dietGoalMet: false,
-              waterProgress: 0,
-              dietCalories: 0,
-              mentalHealthProgress: 0,
-              focusProgress: 0,
-
-              // Clear current day data (archived data is preserved in Firebase)
-              meals: [],
-              waterLogs: [],
-              mentalHealthLogs: [],
-              focusLogs: [],
-
-              // Keep only today's focus tasks (scheduled tasks)
-              focusTasks: (state.focusTasks || []).filter(task => task.date === today),
-            });
+            set((state) => ({
+              today: {
+                date: today,
+                lastReset: new Date().toISOString(),
+                progress: {
+                  water: 0,
+                  calories: 0,
+                  focus: 0,
+                  mentalHealth: 0
+                },
+                goalsCompleted: {
+                  water: false,
+                  calories: false,
+                  focus: false,
+                  workout: false,
+                  allGoalsMet: false
+                }
+              },
+              activities: {
+                water: [],
+                meals: [],
+                workouts: [],
+                focus: [],
+                mentalHealth: []
+              },
+              tasks: {
+                focus: (state.tasks.focus || []).filter(task => task.date === today)
+              }
+            }));
+            
+            get().syncDeprecatedFields();
           }
         } catch (error) {
           console.error('Error resetting daily progress:', error);
@@ -277,16 +478,30 @@ export const useUserStore = create((set, get) => ({
         try {
           const { newProgress, waterGoalMet, newLog } = await state.firebaseService.logWater(
             amount,
-            state.waterProgress,
-            state.waterGoal,
-            state.waterLogs
+            state.today.progress.water,
+            state.goals.water.target,
+            state.activities.water
           );
 
-          set({
-            waterProgress: newProgress,
-            waterGoalMet,
-            waterLogs: [...state.waterLogs, newLog]
-          });
+          set((state) => ({
+            today: {
+              ...state.today,
+              progress: {
+                ...state.today.progress,
+                water: newProgress
+              },
+              goalsCompleted: {
+                ...state.today.goalsCompleted,
+                water: waterGoalMet
+              }
+            },
+            activities: {
+              ...state.activities,
+              water: [...state.activities.water, newLog]
+            }
+          }));
+          
+          get().syncDeprecatedFields();
         } catch (error) {
           console.error('Error logging water:', error);
         }
@@ -303,15 +518,29 @@ export const useUserStore = create((set, get) => ({
         try {
           const { newMeal, newCalories, dietGoalMet } = await state.firebaseService.logMeal(
             meal,
-            state.meals,
-            state.dietCalories
+            state.activities.meals,
+            state.today.progress.calories
           );
 
-          set({
-            dietCalories: newCalories,
-            dietGoalMet,
-            meals: [...state.meals, newMeal]
-          });
+          set((state) => ({
+            today: {
+              ...state.today,
+              progress: {
+                ...state.today.progress,
+                calories: newCalories
+              },
+              goalsCompleted: {
+                ...state.today.goalsCompleted,
+                calories: dietGoalMet
+              }
+            },
+            activities: {
+              ...state.activities,
+              meals: [...state.activities.meals, newMeal]
+            }
+          }));
+          
+          get().syncDeprecatedFields();
         } catch (error) {
           console.error('Error logging meal:', error);
         }
@@ -352,19 +581,30 @@ export const useUserStore = create((set, get) => ({
 
             const { newHistory } = await state.firebaseService.setWorkoutCompleted(
               legacyData,
-              state.workoutHistory
+              state.activities.workouts
             );
 
-            set({
-              workoutCompleted: true,
-              workoutHistory: newHistory
-            });
+            set((state) => ({
+              today: {
+                ...state.today,
+                goalsCompleted: {
+                  ...state.today.goalsCompleted,
+                  workout: true
+                }
+              },
+              activities: {
+                ...state.activities,
+                workouts: newHistory
+              }
+            }));
+            
+            get().syncDeprecatedFields();
             return;
           }
 
           const { newHistory } = await state.firebaseService.saveWorkoutSession(
             workoutSessionData,
-            state.workoutHistory
+            state.activities.workouts
           );
 
           // Clear the in-progress workout since it's now completed
@@ -372,11 +612,22 @@ export const useUserStore = create((set, get) => ({
             await state.firebaseService.clearWorkoutProgress();
           }
 
-          set({
-            workoutCompleted: true,
-            workoutHistory: newHistory,
-            currentWorkoutSession: null // Clear current session
-          });
+          set((state) => ({
+            today: {
+              ...state.today,
+              goalsCompleted: {
+                ...state.today.goalsCompleted,
+                workout: true
+              }
+            },
+            activities: {
+              ...state.activities,
+              workouts: newHistory
+            },
+            currentWorkoutSession: null
+          }));
+          
+          get().syncDeprecatedFields();
         } catch (error) {
           // Error saving workout session
         }
@@ -407,13 +658,20 @@ export const useUserStore = create((set, get) => ({
       clearWorkoutProgress: async () => {
         const state = get();
         if (!state.firebaseService || !state.firebaseService.clearWorkoutProgress) {
+          console.warn('[userStore] clearWorkoutProgress: Firebase service not available');
           return;
         }
 
         try {
+          console.log('[userStore] Clearing workout progress from Firebase...');
           await state.firebaseService.clearWorkoutProgress();
+          console.log('[userStore] Cleared from Firebase, now clearing local state...');
+          
+          // Also clear the local state
+          set({ currentWorkoutSession: null });
+          console.log('[userStore] Local state cleared');
         } catch (error) {
-          console.error('Error clearing workout progress:', error);
+          console.error('[userStore] Error clearing workout progress:', error);
         }
       },
 
@@ -532,13 +790,24 @@ export const useUserStore = create((set, get) => ({
         try {
           const { newHistory } = await state.firebaseService.saveCardioWorkout(
             cardioData,
-            state.workoutHistory
+            state.activities.workouts
           );
 
-          set({
-            workoutCompleted: true,
-            workoutHistory: newHistory
-          });
+          set((state) => ({
+            today: {
+              ...state.today,
+              goalsCompleted: {
+                ...state.today.goalsCompleted,
+                workout: true
+              }
+            },
+            activities: {
+              ...state.activities,
+              workouts: newHistory
+            }
+          }));
+          
+          get().syncDeprecatedFields();
         } catch (error) {
           // Silent error handling - could be logged to external service
         }
@@ -551,10 +820,36 @@ export const useUserStore = create((set, get) => ({
         // First, check for missed days and reset streak if necessary
         await get().checkAndResetStreakForMissedDays();
 
-        // Check if focus goal is met (100% progress based on daily goal)
-        const focusGoalMet = state.focusProgress >= 100;
+        // Check if all goals are met from new schema
+        const allGoalsMet = 
+          state.today.goalsCompleted.workout &&
+          state.today.goalsCompleted.water &&
+          state.today.goalsCompleted.calories &&
+          state.today.goalsCompleted.focus;
 
-        if (state.workoutCompleted && state.waterGoalMet && state.dietGoalMet && focusGoalMet) {
+        // Update allGoalsMet in state and Firebase
+        if (allGoalsMet !== state.today.goalsCompleted.allGoalsMet) {
+          set((state) => ({
+            today: {
+              ...state.today,
+              goalsCompleted: {
+                ...state.today.goalsCompleted,
+                allGoalsMet
+              }
+            }
+          }));
+
+          // Update in Firebase
+          if (state.firebaseService) {
+            try {
+              await state.firebaseService.updateAllGoalsMet(allGoalsMet);
+            } catch (error) {
+              console.error('Error updating allGoalsMet:', error);
+            }
+          }
+        }
+
+        if (allGoalsMet) {
           const today = new Date().toISOString().slice(0, 10);
           // Only add streak if not already added today
           if (!state.calendar.find(c => c.date === today && c.completed)) {
@@ -670,7 +965,7 @@ export const useUserStore = create((set, get) => ({
       // Mental Health tracking
       updateMentalHealthProgress: async (percentage) => {
         const state = get();
-        const newProgress = Math.min(state.mentalHealthProgress + percentage, 100);
+        const newProgress = Math.min(state.today.progress.mentalHealth + percentage, 100);
 
         if (!state.firebaseService) {
           console.error('Firebase service not available');
@@ -679,7 +974,17 @@ export const useUserStore = create((set, get) => ({
 
         try {
           await state.firebaseService.updateMentalHealthProgress(newProgress);
-          set({ mentalHealthProgress: newProgress });
+          set((state) => ({
+            today: {
+              ...state.today,
+              progress: {
+                ...state.today.progress,
+                mentalHealth: newProgress
+              }
+            }
+          }));
+          
+          get().syncDeprecatedFields();
         } catch (error) {
           console.error('Error updating mental health progress:', error);
         }
@@ -704,9 +1009,16 @@ export const useUserStore = create((set, get) => ({
         try {
           const { updatedLogs } = await state.firebaseService.logMentalHealthActivity(
             newLog,
-            state.mentalHealthLogs
+            state.activities.mentalHealth
           );
-          set({ mentalHealthLogs: updatedLogs });
+          set((state) => ({
+            activities: {
+              ...state.activities,
+              mentalHealth: updatedLogs
+            }
+          }));
+          
+          get().syncDeprecatedFields();
         } catch (error) {
           console.error('Error logging breathing session:', error);
         }
@@ -730,9 +1042,16 @@ export const useUserStore = create((set, get) => ({
         try {
           const { updatedLogs } = await state.firebaseService.logMentalHealthActivity(
             newLog,
-            state.mentalHealthLogs
+            state.activities.mentalHealth
           );
-          set({ mentalHealthLogs: updatedLogs });
+          set((state) => ({
+            activities: {
+              ...state.activities,
+              mentalHealth: updatedLogs
+            }
+          }));
+          
+          get().syncDeprecatedFields();
         } catch (error) {
           console.error('Error logging meditation session:', error);
         }
@@ -756,9 +1075,16 @@ export const useUserStore = create((set, get) => ({
         try {
           const { updatedLogs } = await state.firebaseService.logMentalHealthActivity(
             newLog,
-            state.mentalHealthLogs
+            state.activities.mentalHealth
           );
-          set({ mentalHealthLogs: updatedLogs });
+          set((state) => ({
+            activities: {
+              ...state.activities,
+              mentalHealth: updatedLogs
+            }
+          }));
+          
+          get().syncDeprecatedFields();
         } catch (error) {
           console.error('Error logging sound healing session:', error);
         }
@@ -782,16 +1108,23 @@ export const useUserStore = create((set, get) => ({
         try {
           const { updatedLogs } = await state.firebaseService.logMentalHealthActivity(
             newLog,
-            state.mentalHealthLogs
+            state.activities.mentalHealth
           );
-          set({ mentalHealthLogs: updatedLogs });
+          set((state) => ({
+            activities: {
+              ...state.activities,
+              mentalHealth: updatedLogs
+            }
+          }));
+          
+          get().syncDeprecatedFields();
         } catch (error) {
           console.error('Error logging mental health entry:', error);
         }
       },
 
       // Focus tracking
-      updateFocusProgress: async (percentage) => {
+      updateFocusProgress: async () => {
         const state = get();
         if (!state.firebaseService) {
           console.error('Firebase service not available');
@@ -799,11 +1132,46 @@ export const useUserStore = create((set, get) => ({
         }
 
         try {
-          const { newProgress } = await state.firebaseService.updateFocusProgress(
-            percentage,
-            state.focusProgress
+          const today = new Date().toISOString().slice(0, 10);
+          
+          // Get today's focus log sessions (pomodoro sessions only)
+          const todaysFocusLogSessions = state.activities.focus.filter(log => 
+            log.time && log.time.slice(0, 10) === today
           );
-          set({ focusProgress: newProgress });
+          const focusLogMinutes = todaysFocusLogSessions.reduce((total, session) => total + (session.duration || 0), 0);
+          
+          // Get today's completed tasks (custom tasks only)
+          const todaysCompletedTasks = state.tasks.focus.filter(task => 
+            task.date === today && task.status === 'completed'
+          );
+          const taskMinutes = todaysCompletedTasks.reduce((total, task) => total + (task.completed || task.planned || 0), 0);
+          
+          // Calculate total minutes
+          const totalMinutes = focusLogMinutes + taskMinutes;
+          
+          const { newProgress, focusGoalMet } = await state.firebaseService.updateFocusProgress(
+            totalMinutes,
+            state.goals.focus.target
+          );
+          
+          set((state) => ({
+            today: {
+              ...state.today,
+              progress: {
+                ...state.today.progress,
+                focus: newProgress
+              },
+              goalsCompleted: {
+                ...state.today.goalsCompleted,
+                focus: focusGoalMet
+              }
+            }
+          }));
+          
+          get().syncDeprecatedFields();
+          
+          // Check if all goals are met for streak
+          await get().checkStreak();
         } catch (error) {
           console.error('Error updating focus progress:', error);
         }
@@ -811,23 +1179,55 @@ export const useUserStore = create((set, get) => ({
 
       logFocusSession: async (duration, task, completed = true) => {
         const state = get();
+        console.log('[userStore] 🎯 logFocusSession called with:', { duration, task, completed });
+        console.log('[userStore] Current activities.focus count:', state.activities?.focus?.length || 0);
+        console.log('[userStore] Current activities.focus array:', state.activities?.focus);
+        
         if (!state.firebaseService) {
-          console.error('Firebase service not available');
+          console.error('[userStore] ❌ Firebase service not available');
+          return;
+        }
+
+        // Validate inputs
+        if (!duration || duration <= 0) {
+          console.error('[userStore] ❌ Invalid duration:', duration);
+          return;
+        }
+
+        if (!task || typeof task !== 'string') {
+          console.error('[userStore] ❌ Invalid task name:', task);
           return;
         }
 
         try {
+          console.log('[userStore] 📤 Calling Firebase logFocusSession...');
+          
           const { newLog } = await state.firebaseService.logFocusSession(
             duration,
             task,
             completed,
-            state.focusLogs
+            state.activities?.focus || []
           );
-          set({
-            focusLogs: [...state.focusLogs, newLog]
-          });
+          
+          console.log('[userStore] 📥 Firebase returned newLog:', newLog);
+          
+          if (newLog) {
+            set((state) => ({
+              activities: {
+                ...state.activities,
+                focus: [...(state.activities?.focus || []), newLog]
+              }
+            }));
+            
+            console.log('[userStore] ✅ Updated activities.focus count:', get().activities?.focus?.length || 0);
+            console.log('[userStore] Updated activities.focus array:', get().activities?.focus);
+            
+            get().syncDeprecatedFields();
+          } else {
+            console.error('[userStore] ❌ No newLog returned from Firebase');
+          }
         } catch (error) {
-          console.error('Error logging focus session:', error);
+          console.error('[userStore] ❌ Error logging focus session:', error);
         }
       },
 
@@ -845,16 +1245,24 @@ export const useUserStore = create((set, get) => ({
         try {
           const { newWorkout, updatedWorkouts } = await state.firebaseService.saveCustomWorkout(
             workoutData,
-            state.customWorkouts
+            state.custom.workouts
           );
 
           // Sort workouts by creation date (latest first)
           const sortedWorkouts = updatedWorkouts.sort((a, b) => {
             const dateA = new Date(a.created || 0);
             const dateB = new Date(b.created || 0);
-            return dateB - dateA; // Descending order (latest first)
+            return dateB - dateA;
           });
-          set({ customWorkouts: sortedWorkouts });
+          
+          set((state) => ({
+            custom: {
+              ...state.custom,
+              workouts: sortedWorkouts
+            }
+          }));
+          
+          get().syncDeprecatedFields();
           return newWorkout;
         } catch (error) {
           console.error('Error saving custom workout:', error);
@@ -874,16 +1282,24 @@ export const useUserStore = create((set, get) => ({
           const { updatedWorkouts } = await state.firebaseService.updateCustomWorkout(
             workoutId,
             workoutData,
-            state.customWorkouts
+            state.custom.workouts
           );
 
           // Sort workouts by creation date (latest first)
           const sortedWorkouts = updatedWorkouts.sort((a, b) => {
             const dateA = new Date(a.created || 0);
             const dateB = new Date(b.created || 0);
-            return dateB - dateA; // Descending order (latest first)
+            return dateB - dateA;
           });
-          set({ customWorkouts: sortedWorkouts });
+          
+          set((state) => ({
+            custom: {
+              ...state.custom,
+              workouts: sortedWorkouts
+            }
+          }));
+          
+          get().syncDeprecatedFields();
           return updatedWorkouts;
         } catch (error) {
           console.error('Error updating custom workout:', error);
@@ -902,16 +1318,24 @@ export const useUserStore = create((set, get) => ({
         try {
           const { updatedWorkouts } = await state.firebaseService.deleteCustomWorkout(
             workoutId,
-            state.customWorkouts
+            state.custom.workouts
           );
 
           // Sort workouts by creation date (latest first)
           const sortedWorkouts = updatedWorkouts.sort((a, b) => {
             const dateA = new Date(a.created || 0);
             const dateB = new Date(b.created || 0);
-            return dateB - dateA; // Descending order (latest first)
+            return dateB - dateA;
           });
-          set({ customWorkouts: sortedWorkouts });
+          
+          set((state) => ({
+            custom: {
+              ...state.custom,
+              workouts: sortedWorkouts
+            }
+          }));
+          
+          get().syncDeprecatedFields();
           return updatedWorkouts;
         } catch (error) {
           console.error('Error deleting custom workout:', error);
@@ -933,9 +1357,17 @@ export const useUserStore = create((set, get) => ({
           const sortedWorkouts = workouts.sort((a, b) => {
             const dateA = new Date(a.created || 0);
             const dateB = new Date(b.created || 0);
-            return dateB - dateA; // Descending order (latest first)
+            return dateB - dateA;
           });
-          set({ customWorkouts: sortedWorkouts });
+          
+          set((state) => ({
+            custom: {
+              ...state.custom,
+              workouts: sortedWorkouts
+            }
+          }));
+          
+          get().syncDeprecatedFields();
           return sortedWorkouts;
         } catch (error) {
           console.error('Error loading custom workouts:', error);
@@ -952,9 +1384,24 @@ export const useUserStore = create((set, get) => ({
         }
 
         try {
+          console.log('[userStore] loadFocusTasks: Loading tasks from Firebase...');
           const tasks = await state.firebaseService.getFocusTasks();
-          set({ focusTasks: tasks });
-          return tasks;
+          console.log('[userStore] loadFocusTasks: Loaded', tasks.length, 'tasks');
+          
+          // Always create a new array reference to trigger React re-renders
+          const newTasksArray = [...tasks];
+          
+          set((state) => ({
+            tasks: {
+              ...state.tasks,
+              focus: newTasksArray
+            }
+          }));
+          
+          console.log('[userStore] loadFocusTasks: State updated with new tasks array');
+          
+          get().syncDeprecatedFields();
+          return newTasksArray;
         } catch (error) {
           console.error('Error loading focus tasks:', error);
           return [];
@@ -967,6 +1414,9 @@ export const useUserStore = create((set, get) => ({
       saveFocusTask: async (taskData) => {
         const state = get();
 
+        console.log('[userStore] saveFocusTask called with:', taskData);
+        console.log('[userStore] Current focus tasks:', state.tasks.focus);
+
         if (!state.firebaseService) {
           console.error('Firebase service not available');
           throw new Error('Authentication required');
@@ -975,13 +1425,39 @@ export const useUserStore = create((set, get) => ({
         try {
           const { newTask, updatedTasks } = await state.firebaseService.saveFocusTask(
             taskData,
-            state.focusTasks
+            state.tasks.focus
           );
 
-          set({ focusTasks: updatedTasks });
+          console.log('[userStore] Firebase returned newTask:', newTask);
+          console.log('[userStore] Firebase returned updatedTasks count:', updatedTasks.length);
+
+          // Always create a new array reference to trigger React re-renders
+          const newTasksArray = [...updatedTasks];
+
+          set((state) => ({
+            tasks: {
+              ...state.tasks,
+              focus: newTasksArray
+            }
+          }));
+          
+          console.log('[userStore] State updated, new tasks count:', get().tasks.focus.length);
+          
+          // ALSO log today's tasks to activities.focus for history tracking
+          const today = new Date().toISOString().slice(0, 10);
+          if (newTask && newTask.date === today) {
+            console.log('[userStore] 📝 Logging today\'s task creation to activities.focus');
+            try {
+              await get().logFocusSession(0, `Task Created: ${newTask.name}`, false);
+            } catch (error) {
+              console.error('[userStore] Error logging task creation to activities:', error);
+            }
+          }
+          
+          get().syncDeprecatedFields();
           return newTask;
         } catch (error) {
-          console.error('Error saving focus task:', error);
+          console.error('[userStore] Error saving focus task:', error);
           throw error;
         }
       },
@@ -998,11 +1474,21 @@ export const useUserStore = create((set, get) => ({
           const { updatedTasks } = await state.firebaseService.updateFocusTask(
             taskId,
             updatedTaskData,
-            state.focusTasks
+            state.tasks.focus
           );
 
-          set({ focusTasks: updatedTasks });
-          return { success: true, updatedTasks };
+          // Always create a new array reference to trigger React re-renders
+          const newTasksArray = [...updatedTasks];
+
+          set((state) => ({
+            tasks: {
+              ...state.tasks,
+              focus: newTasksArray
+            }
+          }));
+          
+          get().syncDeprecatedFields();
+          return { success: true, updatedTasks: newTasksArray };
         } catch (error) {
           console.error('Error updating focus task:', error);
           throw error;
@@ -1019,13 +1505,13 @@ export const useUserStore = create((set, get) => ({
 
         try {
           // Find the task before updating to check previous status
-          const taskBefore = state.focusTasks.find(task => task.id === taskId);
+          const taskBefore = state.tasks.focus.find(task => task.id === taskId);
           const wasCompleted = taskBefore?.status === 'completed';
 
           const { updatedTasks } = await state.firebaseService.updateFocusTaskProgress(
             taskId,
             minutesCompleted,
-            state.focusTasks
+            state.tasks.focus
           );
 
           // Find the updated task to check new status
@@ -1049,46 +1535,25 @@ export const useUserStore = create((set, get) => ({
             await get().updateFocusProgress();
           }
 
-          set({ focusTasks: updatedTasks });
-          return updatedTasks;
+          // Always create a new array reference to trigger React re-renders
+          const newTasksArray = [...updatedTasks];
+
+          set((state) => ({
+            tasks: {
+              ...state.tasks,
+              focus: newTasksArray
+            }
+          }));
+          
+          get().syncDeprecatedFields();
+          return newTasksArray;
         } catch (error) {
           console.error('Error updating focus task progress:', error);
           throw error;
         }
       },
 
-      // Update focus progress based on completed tasks
-      updateFocusProgress: async () => {
-        const state = get();
-        const today = new Date().toISOString().slice(0, 10);
 
-        // Get today's completed focus tasks
-        const todaysCompletedTasks = state.focusTasks.filter(task =>
-          task.date === today && task.status === 'completed'
-        );
-
-        // Calculate total minutes completed today
-        const totalMinutesCompleted = todaysCompletedTasks.reduce((total, task) => {
-          return total + (task.completed || task.planned || 25);
-        }, 0);
-
-        // Get daily focus goal from XP store (which syncs with settings)
-        const { useXpStore } = await import('./xpStore');
-        const dailyGoal = useXpStore.getState().getDailyProgress().threshold;
-
-        // Calculate progress percentage based on configurable goal
-        const progressPercentage = Math.min((totalMinutesCompleted / dailyGoal) * 100, 100);
-
-        // Update focus progress
-        if (state.firebaseService) {
-          try {
-            await state.firebaseService.updateFocusProgress(progressPercentage, 0);
-            set({ focusProgress: progressPercentage });
-          } catch (error) {
-            console.error('Error updating focus progress:', error);
-          }
-        }
-      },
 
       deleteFocusTask: async (taskId) => {
         const state = get();
@@ -1101,11 +1566,21 @@ export const useUserStore = create((set, get) => ({
         try {
           const { updatedTasks } = await state.firebaseService.deleteFocusTask(
             taskId,
-            state.focusTasks
+            state.tasks.focus
           );
 
-          set({ focusTasks: updatedTasks });
-          return updatedTasks;
+          // Always create a new array reference to trigger React re-renders
+          const newTasksArray = [...updatedTasks];
+
+          set((state) => ({
+            tasks: {
+              ...state.tasks,
+              focus: newTasksArray
+            }
+          }));
+          
+          get().syncDeprecatedFields();
+          return newTasksArray;
         } catch (error) {
           console.error('Error deleting focus task:', error);
           throw error;
@@ -1123,10 +1598,17 @@ export const useUserStore = create((set, get) => ({
         try {
           const { updatedTasks } = await state.firebaseService.deleteFocusTaskSeries(
             taskId,
-            state.focusTasks
+            state.tasks.focus
           );
 
-          set({ focusTasks: updatedTasks });
+          set((state) => ({
+            tasks: {
+              ...state.tasks,
+              focus: updatedTasks
+            }
+          }));
+          
+          get().syncDeprecatedFields();
           return updatedTasks;
         } catch (error) {
           console.error('Error deleting focus task series:', error);
@@ -1146,10 +1628,17 @@ export const useUserStore = create((set, get) => ({
           const { updatedTasks } = await state.firebaseService.addFocusTaskReflection(
             taskId,
             reflection,
-            state.focusTasks
+            state.tasks.focus
           );
 
-          set({ focusTasks: updatedTasks });
+          set((state) => ({
+            tasks: {
+              ...state.tasks,
+              focus: updatedTasks
+            }
+          }));
+          
+          get().syncDeprecatedFields();
           return updatedTasks;
         } catch (error) {
           console.error('Error adding focus task reflection:', error);
@@ -1168,7 +1657,14 @@ export const useUserStore = create((set, get) => ({
 
         try {
           const updatedEntries = await state.firebaseService.saveJournalEntry(entry);
-          set({ journalEntries: updatedEntries });
+          set((state) => ({
+            custom: {
+              ...state.custom,
+              journal: updatedEntries
+            }
+          }));
+          
+          get().syncDeprecatedFields();
           return updatedEntries;
         } catch (error) {
           console.error('Error saving journal entry:', error);
@@ -1186,7 +1682,14 @@ export const useUserStore = create((set, get) => ({
 
         try {
           const updatedEntries = await state.firebaseService.updateJournalEntry(entryId, updatedContent);
-          set({ journalEntries: updatedEntries });
+          set((state) => ({
+            custom: {
+              ...state.custom,
+              journal: updatedEntries
+            }
+          }));
+          
+          get().syncDeprecatedFields();
           return updatedEntries;
         } catch (error) {
           console.error('Error updating journal entry:', error);
@@ -1204,7 +1707,14 @@ export const useUserStore = create((set, get) => ({
 
         try {
           const updatedEntries = await state.firebaseService.deleteJournalEntry(entryId);
-          set({ journalEntries: updatedEntries });
+          set((state) => ({
+            custom: {
+              ...state.custom,
+              journal: updatedEntries
+            }
+          }));
+          
+          get().syncDeprecatedFields();
           return updatedEntries;
         } catch (error) {
           console.error('Error deleting journal entry:', error);
@@ -1222,8 +1732,16 @@ export const useUserStore = create((set, get) => ({
 
         try {
           const progress = await state.firebaseService.loadUserProgress();
-          set({ journalEntries: progress.journalEntries || [] });
-          return progress.journalEntries || [];
+          const journalEntries = progress.custom?.journal || progress.journalEntries || [];
+          set((state) => ({
+            custom: {
+              ...state.custom,
+              journal: journalEntries
+            }
+          }));
+          
+          get().syncDeprecatedFields();
+          return journalEntries;
         } catch (error) {
           console.error('Error loading journal entries:', error);
           return [];
@@ -1253,9 +1771,16 @@ export const useUserStore = create((set, get) => ({
         try {
           const { updatedLogs } = await state.firebaseService.logMentalHealthActivity(
             newLog,
-            state.mentalHealthLogs
+            state.activities.mentalHealth
           );
-          set({ mentalHealthLogs: updatedLogs });
+          set((state) => ({
+            activities: {
+              ...state.activities,
+              mentalHealth: updatedLogs
+            }
+          }));
+          
+          get().syncDeprecatedFields();
         } catch (error) {
           console.error('Error logging chat session:', error);
         }
@@ -1282,9 +1807,16 @@ export const useUserStore = create((set, get) => ({
         try {
           const { updatedLogs } = await state.firebaseService.logMentalHealthActivity(
             newLog,
-            state.mentalHealthLogs
+            state.activities.mentalHealth
           );
-          set({ mentalHealthLogs: updatedLogs });
+          set((state) => ({
+            activities: {
+              ...state.activities,
+              mentalHealth: updatedLogs
+            }
+          }));
+          
+          get().syncDeprecatedFields();
         } catch (error) {
           console.error('Error logging journal activity:', error);
         }

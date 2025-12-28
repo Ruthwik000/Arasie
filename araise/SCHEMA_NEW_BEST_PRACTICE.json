@@ -1,0 +1,318 @@
+{
+  "userId": "user123",
+  "email": "user@example.com",
+  "displayName": "John Doe",
+  "createdAt": "2025-01-01T00:00:00.000Z",
+  "lastUpdated": "2025-01-15T12:00:00.000Z",
+  
+  "profile": {
+    "level": 5,
+    "xp": 1250,
+    "streakDays": 7,
+    "lastActiveDate": "2025-01-15",
+    "lastStreakDate": "2025-01-15"
+  },
+  
+  "goals": {
+    "water": {
+      "target": 3000,
+      "unit": "ml"
+    },
+    "calories": {
+      "target": 2000,
+      "unit": "kcal"
+    },
+    "focus": {
+      "target": 60,
+      "unit": "minutes"
+    },
+    "workout": {
+      "target": 1,
+      "unit": "sessions"
+    }
+  },
+  
+  "today": {
+    "date": "2025-01-15",
+    "lastReset": "2025-01-15T00:00:00.000Z",
+    "progress": {
+      "water": 2000,
+      "calories": 1500,
+      "focus": 45,
+      "mentalHealth": 50
+    },
+    "goalsCompleted": {
+      "water": false,
+      "calories": false,
+      "focus": false,
+      "workout": true,
+      "allGoalsMet": false
+    }
+  },
+  
+  "activities": {
+    "water": [
+      {
+        "id": 1736956800000,
+        "amount": 500,
+        "time": "2025-01-15T08:00:00.000Z"
+      },
+      {
+        "id": 1736960400000,
+        "amount": 750,
+        "time": "2025-01-15T09:00:00.000Z"
+      },
+      {
+        "id": 1736964000000,
+        "amount": 750,
+        "time": "2025-01-15T10:00:00.000Z"
+      }
+    ],
+    "meals": [
+      {
+        "id": 1736956800000,
+        "name": "Breakfast",
+        "calories": 450,
+        "carbs": 60,
+        "protein": 20,
+        "fats": 15,
+        "category": "breakfast",
+        "time": "2025-01-15T08:00:00.000Z"
+      },
+      {
+        "id": 1736967600000,
+        "name": "Lunch",
+        "calories": 650,
+        "carbs": 80,
+        "protein": 35,
+        "fats": 20,
+        "category": "lunch",
+        "time": "2025-01-15T12:00:00.000Z"
+      },
+      {
+        "id": 1736974800000,
+        "name": "Snack",
+        "calories": 200,
+        "carbs": 25,
+        "protein": 5,
+        "fats": 8,
+        "category": "snack",
+        "time": "2025-01-15T14:00:00.000Z"
+      }
+    ],
+    "workouts": [
+      {
+        "id": 1736960400000,
+        "planName": "Upper Body Strength",
+        "planId": "upper-body-001",
+        "dayId": "day-1",
+        "category": "gym",
+        "type": "split",
+        "status": "completed",
+        "startTime": "2025-01-15T09:00:00.000Z",
+        "endTime": "2025-01-15T10:15:00.000Z",
+        "duration": 75,
+        "exercises": [
+          {
+            "name": "Bench Press",
+            "sets": 4,
+            "reps": 10,
+            "weight": 135,
+            "completed": true,
+            "completedSets": 4,
+            "setProgress": {
+              "0": { "completed": true, "actualReps": 10, "actualWeight": 135 },
+              "1": { "completed": true, "actualReps": 10, "actualWeight": 135 },
+              "2": { "completed": true, "actualReps": 9, "actualWeight": 135 },
+              "3": { "completed": true, "actualReps": 8, "actualWeight": 135 }
+            },
+            "poseAnalyzer": { "used": false }
+          },
+          {
+            "name": "Dumbbell Rows",
+            "sets": 3,
+            "reps": 12,
+            "weight": 50,
+            "completed": true,
+            "completedSets": 3,
+            "setProgress": {
+              "0": { "completed": true, "actualReps": 12, "actualWeight": 50 },
+              "1": { "completed": true, "actualReps": 12, "actualWeight": 50 },
+              "2": { "completed": true, "actualReps": 10, "actualWeight": 50 }
+            },
+            "poseAnalyzer": { "used": true, "feedback": "Good form" }
+          }
+        ],
+        "summary": {
+          "totalExercises": 2,
+          "completedExercises": 2,
+          "totalSets": 7,
+          "completedSets": 7
+        },
+        "totalVolume": 4050
+      }
+    ],
+    "focus": [
+      {
+        "id": 1736964000000,
+        "taskName": "Deep Work Session",
+        "duration": 25,
+        "completed": true,
+        "time": "2025-01-15T10:00:00.000Z"
+      },
+      {
+        "id": 1736967600000,
+        "taskName": "Code Review",
+        "duration": 20,
+        "completed": true,
+        "time": "2025-01-15T11:00:00.000Z"
+      }
+    ],
+    "mentalHealth": [
+      {
+        "id": 1736956800000,
+        "type": "breathing",
+        "activity": "Box Breathing",
+        "duration": 5,
+        "time": "2025-01-15T08:00:00.000Z"
+      },
+      {
+        "id": 1736971200000,
+        "type": "meditation",
+        "activity": "Mindfulness Meditation",
+        "duration": 10,
+        "time": "2025-01-15T13:00:00.000Z"
+      }
+    ]
+  },
+  
+  "tasks": {
+    "focus": [
+      {
+        "id": 1736956800000,
+        "name": "Complete project documentation",
+        "planned": 60,
+        "completed": 45,
+        "status": "in-progress",
+        "date": "2025-01-15",
+        "priority": "high",
+        "startTime": "14:00",
+        "endTime": "15:00",
+        "createdAt": "2025-01-15T08:00:00.000Z",
+        "isRepeating": false,
+        "originalTaskId": null
+      },
+      {
+        "id": 1736960400000,
+        "name": "Daily standup",
+        "planned": 15,
+        "completed": 15,
+        "status": "completed",
+        "date": "2025-01-15",
+        "priority": "medium",
+        "startTime": "09:00",
+        "endTime": "09:15",
+        "createdAt": "2025-01-14T08:00:00.000Z",
+        "isRepeating": true,
+        "originalTaskId": null,
+        "repeat": "daily",
+        "completionDescription": "Discussed sprint progress and blockers"
+      }
+    ]
+  },
+  
+  "custom": {
+    "workouts": [
+      {
+        "id": 1736870400000,
+        "name": "My Custom HIIT",
+        "category": "cardio",
+        "difficulty": "intermediate",
+        "duration": 30,
+        "exercises": [
+          {
+            "name": "Burpees",
+            "sets": 3,
+            "reps": 15,
+            "restTime": 30
+          },
+          {
+            "name": "Mountain Climbers",
+            "sets": 3,
+            "reps": 20,
+            "restTime": 30
+          },
+          {
+            "name": "Jump Squats",
+            "sets": 3,
+            "reps": 15,
+            "restTime": 30
+          }
+        ],
+        "createdAt": "2025-01-14T08:00:00.000Z",
+        "lastModified": "2025-01-14T08:00:00.000Z"
+      }
+    ],
+    "journal": [
+      {
+        "id": 1736956800000,
+        "title": "Morning Reflections",
+        "content": "Feeling energized and ready to tackle the day. Grateful for good health and progress.",
+        "mood": "happy",
+        "tags": ["gratitude", "morning"],
+        "createdAt": "2025-01-15T08:00:00.000Z",
+        "lastModified": "2025-01-15T08:00:00.000Z"
+      }
+    ]
+  },
+  
+  "history": {
+    "2025-01-14": {
+      "date": "2025-01-14",
+      "archivedAt": "2025-01-15T00:00:00.000Z",
+      "progress": {
+        "water": 3000,
+        "calories": 2100,
+        "focus": 75,
+        "mentalHealth": 100
+      },
+      "goalsCompleted": {
+        "water": true,
+        "calories": true,
+        "workout": true,
+        "focus": true,
+        "allGoalsMet": true
+      },
+      "activities": {
+        "water": [],
+        "meals": [],
+        "workouts": [],
+        "focus": [],
+        "mentalHealth": []
+      }
+    }
+  },
+  
+  "metadata": {
+    "schemaVersion": "2.0",
+    "lastMigration": "2025-01-15T00:00:00.000Z",
+    "dataRetentionDays": 365
+  },
+  
+  "calendar": [
+    {
+      "date": "2025-01-14",
+      "completed": true
+    },
+    {
+      "date": "2025-01-13",
+      "completed": true
+    },
+    {
+      "date": "2025-01-12",
+      "completed": true
+    }
+  ],
+  
+  "dailyXp": 45
+}

@@ -208,8 +208,17 @@ export default function TimeBlockedList({ onStart }) {
       {/* Edit Task Modal */}
       <AddTaskModal 
         isOpen={!!editingTask} 
-        onClose={() => setEditingTask(null)}
+        onClose={() => {
+          setEditingTask(null)
+        }}
         editTask={editingTask}
+        loadFocusTasks={async () => {
+          // Reload tasks from userStore
+          const { loadFocusTasks } = useUserStore.getState()
+          if (loadFocusTasks) {
+            await loadFocusTasks()
+          }
+        }}
       />
     </div>
   )

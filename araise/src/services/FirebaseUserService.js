@@ -10,41 +10,14 @@ export class FirebaseUserService {
     this.serverTimestamp = serverTimestamp;
   }
 
-  // Load user progress from Firestore
+  // Load user progress from Firestore (NEW SCHEMA)
   async loadUserProgress() {
     try {
       const userDoc = await getDoc(this.userRef);
       if (userDoc.exists()) {
         const data = userDoc.data();
-        return {
-          level: data.level || 1,
-          streakCount: data.streakCount || 0,
-          calendar: data.calendar || [],
-          waterProgress: data.waterProgress || 0,
-          waterGoal: data.waterGoal || 3000,
-          dietCalories: data.dietCalories || 0,
-          workoutCompleted: data.workoutCompleted || false,
-          waterGoalMet: data.waterGoalMet || false,
-          dietGoalMet: data.dietGoalMet || false,
-          mentalHealthProgress: data.mentalHealthProgress || 0,
-          focusProgress: data.focusProgress || 0,
-          dailyFocusGoal: data.dailyFocusGoal || 60,
-          dailyCalorieGoal: data.dailyCalorieGoal || 2000,
-          xp: data.xp || 0,
-          dailyXp: data.dailyXp || 0,
-          streakDays: data.streakDays || 0,
-          lastActiveDate: data.lastActiveDate || null,
-          lastStreakDate: data.lastStreakDate || null,
-          meals: data.meals || [],
-          waterLogs: data.waterLogs || [],
-          workoutHistory: data.workoutHistory || [],
-          customWorkouts: data.customWorkouts || [],
-          mentalHealthLogs: data.mentalHealthLogs || [],
-          focusLogs: data.focusLogs || [],
-          focusTasks: data.focusTasks || [],
-          journalEntries: data.journalEntries || [],
-          lastReset: data.lastReset || null
-        };
+        // Return new schema format directly
+        return this.ensureSchemaStructure(data);
       }
       return this.getDefaultProgress();
     } catch (error) {
@@ -53,35 +26,169 @@ export class FirebaseUserService {
     }
   }
 
-  // Get default progress structure
-  getDefaultProgress() {
+  // Ensure data has complete new schema structure
+  ensureSchemaStructure(data) {
+    const today = new Date().toISOString().slice(0, 10);
+    
     return {
-      level: 1,
-      streakCount: 0,
-      calendar: [],
-      waterProgress: 0,
-      waterGoal: 3000,
-      dietCalories: 0,
-      workoutCompleted: false,
-      waterGoalMet: false,
-      dietGoalMet: false,
-      mentalHealthProgress: 0,
-      focusProgress: 0,
-      dailyFocusGoal: 60,
-      dailyCalorieGoal: 2000,
-      xp: 0,
-      dailyXp: 0,
-      streakDays: 0,
-      lastActiveDate: null,
-      lastStreakDate: null,
-      meals: [],
-      waterLogs: [],
-      workoutHistory: [],
-      customWorkouts: [],
-      mentalHealthLogs: [],
-      focusLogs: [],
-      focusTasks: [], // Custom focus tasks
-      lastReset: null
+      // User identity
+      userId: data.userId || this.userId,
+      email: data.email || null,
+      displayName: data.displayName || null,
+      createdAt: data.createdAt || new Date().toISOString(),
+      lastUpdated: data.lastUpdated || new Date().toISOString(),
+      
+      // Profile & Gamification
+      profile: {
+        level: data.profile?.level || 1,
+        xp: data.profile?.xp || 0,
+        streakDays: data.profile?.streakDays || 0,
+        lastActiveDate: data.profile?.lastActiveDate || null,
+        lastStreakDate: data.profile?.lastStreakDate || null
+      },
+      
+      // Goals
+      goals: {
+        water: data.goals?.water || { target: 3000, unit: 'ml' },
+        calories: data.goals?.calories || { target: 2000, unit: 'kcal' },
+        focus: data.goals?.focus || { target: 60, unit: 'minutes' },
+        workout: data.goals?.workout || { target: 1, unit: 'sessions' }
+      },
+      
+      // Today's Progress
+      today: {
+        date: data.today?.date || today,
+        lastReset: data.today?.lastReset || null,
+        progress: {
+          water: data.today?.progress?.water || 0,
+          calories: data.today?.progress?.calories || 0,
+          focus: data.today?.progress?.focus || 0,
+          mentalHealth: data.today?.progress?.mentalHealth || 0
+        },
+        goalsCompleted: {
+          water: data.today?.goalsCompleted?.water || false,
+          calories: data.today?.goalsCompleted?.calories || false,
+          focus: data.today?.goalsCompleted?.focus || false,
+          workout: data.today?.goalsCompleted?.workout || false,
+          allGoalsMet: data.today?.goalsCompleted?.allGoalsMet || false
+        }
+      },
+      
+      // Activities
+      activities: {
+        water: data.activities?.water || [],
+        meals: data.activities?.meals || [],
+        workouts: data.activities?.workouts || [],
+        focus: data.activities?.focus || [],
+        mentalHealth: data.activities?.mentalHealth || []
+      },
+      
+      // Tasks
+      tasks: {
+        focus: data.tasks?.focus || []
+      },
+      
+      // Custom Content
+      custom: {
+        workouts: data.custom?.workouts || [],
+        journal: data.custom?.journal || []
+      },
+      
+      // Historical Data
+      history: data.history || {},
+      
+      // Metadata
+      metadata: data.metadata || {
+        schemaVersion: '2.0',
+        lastMigration: null,
+        dataRetentionDays: 365
+      },
+      
+      // Calendar for streak tracking
+      calendar: data.calendar || []
+    };
+  }
+
+  // Get default progress structure (NEW SCHEMA)
+  getDefaultProgress() {
+    const today = new Date().toISOString().slice(0, 10);
+    
+    return {
+      // User identity
+      userId: this.userId,
+      email: null,
+      displayName: null,
+      createdAt: new Date().toISOString(),
+      lastUpdated: new Date().toISOString(),
+      
+      // Profile & Gamification
+      profile: {
+        level: 1,
+        xp: 0,
+        streakDays: 0,
+        lastActiveDate: null,
+        lastStreakDate: null
+      },
+      
+      // Goals
+      goals: {
+        water: { target: 3000, unit: 'ml' },
+        calories: { target: 2000, unit: 'kcal' },
+        focus: { target: 60, unit: 'minutes' },
+        workout: { target: 1, unit: 'sessions' }
+      },
+      
+      // Today's Progress
+      today: {
+        date: today,
+        lastReset: null,
+        progress: {
+          water: 0,
+          calories: 0,
+          focus: 0,
+          mentalHealth: 0
+        },
+        goalsCompleted: {
+          water: false,
+          calories: false,
+          focus: false,
+          workout: false,
+          allGoalsMet: false
+        }
+      },
+      
+      // Activities
+      activities: {
+        water: [],
+        meals: [],
+        workouts: [],
+        focus: [],
+        mentalHealth: []
+      },
+      
+      // Tasks
+      tasks: {
+        focus: []
+      },
+      
+      // Custom Content
+      custom: {
+        workouts: [],
+        journal: []
+      },
+      
+      // Historical Data
+      history: {},
+      
+      // Metadata
+      metadata: {
+        schemaVersion: '2.0',
+        lastMigration: new Date().toISOString(),
+        dataRetentionDays: 365
+      },
+      
+      // Calendar for streak tracking
+      calendar: []
     };
   }
 
@@ -98,24 +205,12 @@ export class FirebaseUserService {
     }
   }
 
-  // Update specific progress field
-  async updateProgress(field, value) {
-    try {
-      await updateDoc(this.userRef, {
-        [field]: value,
-        lastUpdated: serverTimestamp()
-      });
-    } catch (error) {
-      console.error('Error updating progress field:', error);
-      throw error;
-    }
-  }
-
-  // Update water goal
+  // Update water goal (NEW SCHEMA)
   async updateWaterGoal(newGoal) {
     try {
       await updateDoc(this.userRef, {
-        waterGoal: newGoal,
+        'goals.water.target': newGoal,
+        'goals.water.unit': 'ml',
         lastUpdated: serverTimestamp()
       });
     } catch (error) {
@@ -124,7 +219,49 @@ export class FirebaseUserService {
     }
   }
 
-  // Log water intake
+  // Update focus goal (NEW SCHEMA)
+  async updateFocusGoal(newGoal) {
+    try {
+      await updateDoc(this.userRef, {
+        'goals.focus.target': newGoal,
+        'goals.focus.unit': 'minutes',
+        lastUpdated: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('Error updating focus goal:', error);
+      throw error;
+    }
+  }
+
+  // Update calorie goal (NEW SCHEMA)
+  async updateCalorieGoal(newGoal) {
+    try {
+      await updateDoc(this.userRef, {
+        'goals.calories.target': newGoal,
+        'goals.calories.unit': 'kcal',
+        lastUpdated: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('Error updating calorie goal:', error);
+      throw error;
+    }
+  }
+
+  // Update workout goal (NEW SCHEMA)
+  async updateWorkoutGoal(newGoal) {
+    try {
+      await updateDoc(this.userRef, {
+        'goals.workout.target': newGoal,
+        'goals.workout.unit': 'sessions',
+        lastUpdated: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('Error updating workout goal:', error);
+      throw error;
+    }
+  }
+
+  // Log water intake (NEW SCHEMA)
   async logWater(amount, currentProgress, waterGoal, currentLogs) {
     const newProgress = currentProgress + amount;
     const waterGoalMet = newProgress >= waterGoal;
@@ -135,9 +272,9 @@ export class FirebaseUserService {
     };
 
     const updates = {
-      waterProgress: newProgress,
-      waterGoalMet,
-      waterLogs: [...currentLogs, newLog],
+      'today.progress.water': newProgress,
+      'today.goalsCompleted.water': waterGoalMet,
+      'activities.water': [...currentLogs, newLog],
       lastUpdated: serverTimestamp()
     };
 
@@ -145,7 +282,7 @@ export class FirebaseUserService {
     return { newProgress, waterGoalMet, newLog };
   }
 
-  // Log meal
+  // Log meal (NEW SCHEMA)
   async logMeal(meal, currentMeals, currentCalories) {
     const newMeal = {
       id: Date.now(),
@@ -156,9 +293,9 @@ export class FirebaseUserService {
     const dietGoalMet = currentMeals.length + 1 >= 3; // 3 meals minimum
 
     const updates = {
-      dietCalories: newCalories,
-      dietGoalMet,
-      meals: [...currentMeals, newMeal],
+      'today.progress.calories': newCalories,
+      'today.goalsCompleted.calories': dietGoalMet,
+      'activities.meals': [...currentMeals, newMeal],
       lastUpdated: serverTimestamp()
     };
 
@@ -234,7 +371,7 @@ export class FirebaseUserService {
     await updateDoc(this.userRef, updates);
   }
 
-  // Save workout session with real exercise data
+  // Save workout session with real exercise data (NEW SCHEMA)
   async saveWorkoutSession(workoutSessionData, currentHistory) {
     if (!workoutSessionData || !workoutSessionData.exercises || workoutSessionData.exercises.length === 0) {
       return { newHistory: currentHistory };
@@ -244,11 +381,13 @@ export class FirebaseUserService {
 
     // Calculate totals for summary
     const totalSets = workoutSessionData.exercises.reduce((sum, ex) => 
-      sum + (parseInt(ex.sets) || 0), 0
+      sum + (parseInt(ex.sets) || parseInt(ex.totalSets) || 1), 0
     );
     const completedSets = workoutSessionData.exercises.reduce((sum, ex) => 
       sum + (ex.completedSets || 0), 0
     );
+    const totalExercises = workoutSessionData.exercises.length;
+    const completedExercises = workoutSessionData.exercises.filter(ex => ex.completed).length;
 
     // Create workout object with complete schema
     const workout = {
@@ -256,31 +395,40 @@ export class FirebaseUserService {
       planName: workoutSessionData.planName || "Workout Session",
       planId: workoutSessionData.planId,
       dayId: workoutSessionData.dayId,
-      category: workoutSessionData.category,
-      type: workoutSessionData.type || "split",
+      category: workoutSessionData.category || workoutSessionData.type,
+      type: workoutSessionData.type || "custom",
       status: workoutSessionData.status || "completed",
-      date: workoutSessionData.date || today,
       startTime: workoutSessionData.startTime,
       endTime: workoutSessionData.endTime,
       duration: workoutSessionData.duration || 30,
       
-      // Exercise data with target sets/reps (not completed values)
+      // Exercise data with proper structure
       exercises: workoutSessionData.exercises.map(exercise => ({
+        name: exercise.exerciseName || exercise.name || "Exercise",
         exerciseName: exercise.exerciseName || exercise.name || "Exercise",
-        sets: parseInt(exercise.sets) || 3,  // Target sets
-        reps: parseInt(exercise.reps) || 12,  // Target reps
+        sets: parseInt(exercise.sets) || parseInt(exercise.totalSets) || 1,  // Target sets
+        reps: exercise.reps || 12,  // Target reps (can be string like "8-12")
         weight: exercise.weight || 0,
         completed: exercise.completed || false,
         completedSets: exercise.completedSets || 0,
-        setProgress: exercise.setProgress || {}
+        setProgress: exercise.setProgress || {},
+        poseAnalyzer: exercise.poseAnalyzer || exercise.pose_analyzer || { used: false },
+        // Preserve additional exercise data
+        primaryMuscle: exercise.primaryMuscle,
+        secondaryMuscles: exercise.secondaryMuscles,
+        equipment: exercise.equipment,
+        difficulty: exercise.difficulty,
+        description: exercise.description,
+        video: exercise.video
       })),
       
-      // Summary with completedSets for accurate progress calculation
+      // Summary with accurate progress calculation
       summary: {
-        totalExercises: workoutSessionData.exercises.length,
-        completedExercises: workoutSessionData.exercises.filter(ex => ex.completed).length,
+        totalExercises: totalExercises,
+        completedExercises: completedExercises,
         totalSets: totalSets,
-        completedSets: completedSets
+        completedSets: completedSets,
+        completionPercentage: totalSets > 0 ? Math.round((completedSets / totalSets) * 100) : 0
       }
     };
 
@@ -293,8 +441,8 @@ export class FirebaseUserService {
     const newHistory = [...currentHistory, workout];
 
     const updates = {
-      workoutCompleted: true,
-      workoutHistory: newHistory,
+      'today.goalsCompleted.workout': true,
+      'activities.workouts': newHistory,
       lastUpdated: serverTimestamp()
     };
 
@@ -337,9 +485,9 @@ export class FirebaseUserService {
       }
     }
 
-    // Update Firebase with cleaned data
+    // Update Firebase with cleaned data (NEW SCHEMA ONLY)
     const updates = {
-      workoutHistory: cleanedHistory,
+      'activities.workouts': cleanedHistory,
       lastUpdated: serverTimestamp()
     };
 
@@ -347,10 +495,10 @@ export class FirebaseUserService {
     return { cleanedHistory };
   }
 
-  // Save cardio workout
+  // Save cardio workout (NEW SCHEMA)
   async saveCardioWorkout(cardioData, currentHistory) {
     const exercises = (cardioData.exercises || [{
-      exerciseName: cardioData.exerciseType || "Cardio",
+      name: cardioData.exerciseType || "Cardio",
       duration: cardioData.duration,
       distance: cardioData.distance,
       speed: cardioData.speed,
@@ -360,7 +508,7 @@ export class FirebaseUserService {
       sets: 1,  // Cardio counts as 1 set
       completed: true,
       completedSets: 1,
-      setProgress: { "0": { completed: true } }
+      setProgress: { "0": { completed: true, actualReps: null } }
     }));
 
     const workout = {
@@ -369,7 +517,6 @@ export class FirebaseUserService {
       type: "cardio",
       category: "cardio",
       status: "completed",
-      date: new Date().toISOString().slice(0, 10),
       startTime: cardioData.startTime || new Date().toISOString(),
       endTime: cardioData.endTime || new Date().toISOString(),
       duration: cardioData.duration || 30,
@@ -391,8 +538,8 @@ export class FirebaseUserService {
     const newHistory = [...currentHistory, workout];
 
     const updates = {
-      workoutCompleted: true,
-      workoutHistory: newHistory,
+      'today.goalsCompleted.workout': true,
+      'activities.workouts': newHistory,
       lastUpdated: serverTimestamp()
     };
 
@@ -400,7 +547,7 @@ export class FirebaseUserService {
     return { newHistory };
   }
 
-  // Add streak
+  // Add streak (NEW SCHEMA)
   async addStreak(date, currentStreak, currentCalendar, currentLevel) {
     const newStreak = currentStreak + 1;
     const newCalendar = [...currentCalendar, { date, completed: true }];
@@ -409,9 +556,11 @@ export class FirebaseUserService {
     const newLevel = newStreak % 30 === 0 ? currentLevel + 1 : currentLevel;
 
     const updates = {
-      streakCount: newStreak,
-      calendar: newCalendar,
-      level: newLevel,
+      'profile.streakDays': newStreak,
+      'profile.level': newLevel,
+      'profile.lastActiveDate': date,
+      'profile.lastStreakDate': date,
+      calendar: newCalendar, // Keep calendar for backward compatibility
       lastUpdated: serverTimestamp()
     };
 
@@ -419,15 +568,15 @@ export class FirebaseUserService {
     return { newStreak, newCalendar, newLevel };
   }
 
-  // Reset streak to 0
+  // Reset streak to 0 (NEW SCHEMA)
   async resetStreak() {
     const updates = {
-      streakCount: 0,
+      'profile.streakDays': 0,
       lastUpdated: serverTimestamp()
     };
 
     await updateDoc(this.userRef, updates);
-    return { streakCount: 0 };
+    return { streakDays: 0 };
   }
 
   // Archive current day data before reset
@@ -492,7 +641,7 @@ export class FirebaseUserService {
     }
   }
 
-  // Reset daily progress with proper archiving
+  // Reset daily progress with proper archiving (NEW SCHEMA)
   async resetDaily() {
     const today = new Date().toISOString().slice(0, 10);
     const yesterday = new Date();
@@ -506,33 +655,34 @@ export class FirebaseUserService {
       const data = userDoc.data();
 
       // Check if we already reset today
-      if (data.lastReset === today) return false;
+      const lastReset = data.today?.lastReset || data.lastReset;
+      if (lastReset === today) return false;
 
       // Archive yesterday's data before resetting
-      const dailyArchives = await this.archiveDayData(yesterdayStr, data);
+      await this.archiveToHistory(yesterdayStr, data);
 
-      // Clear current day data but keep historical archives
+      // Clear current day data using new schema
       const updates = {
-        workoutCompleted: false,
-        waterGoalMet: false,
-        dietGoalMet: false,
-        waterProgress: 0,
-        dietCalories: 0,
-        mentalHealthProgress: 0,
-        focusProgress: 0,
+        'today.date': today,
+        'today.lastReset': today,
+        'today.progress.water': 0,
+        'today.progress.calories': 0,
+        'today.progress.mentalHealth': 0,
+        'today.progress.focus': 0,
+        'today.goalsCompleted.water': false,
+        'today.goalsCompleted.calories': false,
+        'today.goalsCompleted.workout': false,
+        'today.goalsCompleted.allGoalsMet': false,
         
-        // Clear current day arrays but preserve in archives
-        meals: [],
-        waterLogs: [],
-        mentalHealthLogs: [],
-        focusLogs: [],
+        // Clear current day arrays
+        'activities.water': [],
+        'activities.meals': [],
+        'activities.mentalHealth': [],
+        'activities.focus': [],
         
-        // Keep focus tasks for today (they might be scheduled for today)
-        focusTasks: (data.focusTasks || []).filter(task => task.date === today),
+        // Keep focus tasks for today
+        'tasks.focus': (data.tasks?.focus || []).filter(task => task.date === today),
         
-        // Update archives and reset info
-        dailyArchives,
-        lastReset: today,
         lastUpdated: serverTimestamp()
       };
 
@@ -544,21 +694,96 @@ export class FirebaseUserService {
     }
   }
 
+  // Archive day data to history (NEW SCHEMA)
+  async archiveToHistory(date, data) {
+    try {
+      const userDoc = await getDoc(this.userRef);
+      if (!userDoc.exists()) return;
+
+      // Create historical entry from new schema
+      const historyEntry = {
+        date: date,
+        archivedAt: new Date().toISOString(),
+        progress: {
+          water: data.today?.progress?.water || 0,
+          calories: data.today?.progress?.calories || 0,
+          focus: data.today?.progress?.focus || 0,
+          mentalHealth: data.today?.progress?.mentalHealth || 0
+        },
+        goalsCompleted: {
+          water: data.today?.goalsCompleted?.water || false,
+          calories: data.today?.goalsCompleted?.calories || false,
+          workout: data.today?.goalsCompleted?.workout || false,
+          focus: data.today?.goalsCompleted?.focus || false,
+          allGoalsMet: data.today?.goalsCompleted?.allGoalsMet || false
+        },
+        activities: {
+          water: (data.activities?.water || []).filter(log => {
+            if (!log.time) return false;
+            try {
+              return new Date(log.time).toISOString().slice(0, 10) === date;
+            } catch { return false; }
+          }),
+          meals: (data.activities?.meals || []).filter(meal => {
+            if (!meal.time) return false;
+            try {
+              return new Date(meal.time).toISOString().slice(0, 10) === date;
+            } catch { return false; }
+          }),
+          workouts: (data.activities?.workouts || []).filter(workout => {
+            if (!workout.startTime) return false;
+            try {
+              return new Date(workout.startTime).toISOString().slice(0, 10) === date;
+            } catch { return false; }
+          }),
+          focus: (data.activities?.focus || []).filter(log => {
+            if (!log.time) return false;
+            try {
+              return new Date(log.time).toISOString().slice(0, 10) === date;
+            } catch { return false; }
+          }),
+          mentalHealth: (data.activities?.mentalHealth || []).filter(log => {
+            if (!log.time) return false;
+            try {
+              return new Date(log.time).toISOString().slice(0, 10) === date;
+            } catch { return false; }
+          })
+        }
+      };
+
+      // Only archive if there's actual data
+      const hasData = historyEntry.activities.water.length > 0 ||
+                     historyEntry.activities.meals.length > 0 ||
+                     historyEntry.activities.workouts.length > 0 ||
+                     historyEntry.activities.focus.length > 0 ||
+                     historyEntry.activities.mentalHealth.length > 0;
+
+      if (hasData) {
+        await updateDoc(this.userRef, {
+          [`history.${date}`]: historyEntry,
+          lastUpdated: serverTimestamp()
+        });
+      }
+    } catch (error) {
+      console.error('Error archiving to history:', error);
+    }
+  }
+
   // Custom Workout Methods
 
-  // Save a new custom workout
+  // Save a new custom workout (NEW SCHEMA)
   async saveCustomWorkout(workoutData, currentWorkouts) {
     const newWorkout = {
       id: Date.now(),
       ...workoutData,
-      created: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
       lastModified: new Date().toISOString()
     };
 
     const updatedWorkouts = [...currentWorkouts, newWorkout];
 
     const updates = {
-      customWorkouts: updatedWorkouts,
+      'custom.workouts': updatedWorkouts,
       lastUpdated: serverTimestamp()
     };
 
@@ -566,7 +791,7 @@ export class FirebaseUserService {
     return { newWorkout, updatedWorkouts };
   }
 
-  // Update an existing custom workout
+  // Update an existing custom workout (NEW SCHEMA)
   async updateCustomWorkout(workoutId, workoutData, currentWorkouts) {
     const updatedWorkouts = currentWorkouts.map(workout =>
       workout.id === workoutId
@@ -575,7 +800,7 @@ export class FirebaseUserService {
     );
 
     const updates = {
-      customWorkouts: updatedWorkouts,
+      'custom.workouts': updatedWorkouts,
       lastUpdated: serverTimestamp()
     };
 
@@ -583,12 +808,12 @@ export class FirebaseUserService {
     return { updatedWorkouts };
   }
 
-  // Delete a custom workout
+  // Delete a custom workout (NEW SCHEMA)
   async deleteCustomWorkout(workoutId, currentWorkouts) {
     const updatedWorkouts = currentWorkouts.filter(workout => workout.id !== workoutId);
 
     const updates = {
-      customWorkouts: updatedWorkouts,
+      'custom.workouts': updatedWorkouts,
       lastUpdated: serverTimestamp()
     };
 
@@ -596,13 +821,13 @@ export class FirebaseUserService {
     return { updatedWorkouts };
   }
 
-  // Get all custom workouts
+  // Get all custom workouts (NEW SCHEMA)
   async getCustomWorkouts() {
     try {
       const userDoc = await getDoc(this.userRef);
       if (userDoc.exists()) {
         const data = userDoc.data();
-        return data.customWorkouts || [];
+        return data.custom?.workouts || [];
       }
       return [];
     } catch (error) {
@@ -615,45 +840,107 @@ export class FirebaseUserService {
 
   // Focus Methods
 
-  // Log focus session
+  // Log focus session (NEW SCHEMA) - FIXED VERSION
   async logFocusSession(duration, task, completed, currentLogs) {
+    console.log('[FirebaseUserService] logFocusSession called with:', { 
+      duration, 
+      task, 
+      completed, 
+      currentLogsCount: currentLogs?.length || 0 
+    });
+    
+    // Validate inputs
+    if (!duration || duration <= 0) {
+      console.error('[FirebaseUserService] Invalid duration:', duration);
+      return { newLog: null };
+    }
+    
+    if (!task || typeof task !== 'string') {
+      console.error('[FirebaseUserService] Invalid task name:', task);
+      return { newLog: null };
+    }
+    
     const newLog = {
       id: Date.now(),
-      duration,
-      task,
-      completed,
+      taskName: task,
+      duration: Number(duration),
+      completed: Boolean(completed),
       time: new Date().toISOString()
     };
 
+    console.log('[FirebaseUserService] Creating newLog:', newLog);
+
+    // Ensure currentLogs is an array
+    const safeCurrentLogs = Array.isArray(currentLogs) ? currentLogs : [];
+    
     const updates = {
-      focusLogs: [...currentLogs, newLog],
+      'activities.focus': [...safeCurrentLogs, newLog],
       lastUpdated: serverTimestamp()
     };
 
-    await updateDoc(this.userRef, updates);
-    return { newLog };
+    console.log('[FirebaseUserService] Saving to Firebase with updates:', {
+      'activities.focus': `Array with ${safeCurrentLogs.length + 1} items`,
+      lastUpdated: 'serverTimestamp()'
+    });
+    
+    try {
+      await updateDoc(this.userRef, updates);
+      console.log('[FirebaseUserService] ✅ Successfully saved focus session to Firebase');
+      console.log('[FirebaseUserService] New activities.focus array length:', safeCurrentLogs.length + 1);
+      return { newLog };
+    } catch (error) {
+      console.error('[FirebaseUserService] ❌ Error saving focus session:', error);
+      console.error('[FirebaseUserService] Error details:', {
+        code: error.code,
+        message: error.message,
+        stack: error.stack
+      });
+      throw error;
+    }
   }
 
-  // Update focus progress
-  async updateFocusProgress(percentage, currentProgress) {
+  // Update focus progress (NEW SCHEMA)
+  async updateFocusProgress(totalMinutes, focusGoal) {
     try {
-      const newProgress = Math.min(currentProgress + percentage, 100);
+      const newProgress = Math.min((totalMinutes / focusGoal) * 100, 100);
+      const focusGoalMet = totalMinutes >= focusGoal;
 
       const updates = {
-        focusProgress: newProgress,
+        'today.progress.focus': newProgress,
+        'today.goalsCompleted.focus': focusGoalMet,
         lastUpdated: serverTimestamp()
       };
 
       await updateDoc(this.userRef, updates);
-      return { newProgress };
+      return { newProgress, focusGoalMet };
     } catch (error) {
       console.error('Error updating focus progress:', error);
       throw error;
     }
   }
 
-  // Save focus task
+  // Update allGoalsMet status (NEW SCHEMA)
+  async updateAllGoalsMet(allGoalsMet) {
+    try {
+      const updates = {
+        'today.goalsCompleted.allGoalsMet': allGoalsMet,
+        lastUpdated: serverTimestamp()
+      };
+
+      await updateDoc(this.userRef, updates);
+      return { allGoalsMet };
+    } catch (error) {
+      console.error('Error updating allGoalsMet:', error);
+      throw error;
+    }
+  }
+
+  // Save focus task (NEW SCHEMA)
   async saveFocusTask(taskData, currentTasks) {
+    console.log('[FirebaseUserService] saveFocusTask called');
+    console.log('[FirebaseUserService] taskData:', taskData);
+    console.log('[FirebaseUserService] currentTasks count:', currentTasks.length);
+    
     const startDate = taskData.date || new Date().toISOString().slice(0, 10);
     const tasksToCreate = [];
 
@@ -664,15 +951,17 @@ export class FirebaseUserService {
       status: 'upcoming',
       completed: 0,
       date: startDate,
-      created: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
       isRepeating: taskData.repeat !== 'none',
       originalTaskId: null // This is the original task
     };
 
+    console.log('[FirebaseUserService] mainTask created:', mainTask);
     tasksToCreate.push(mainTask);
 
     // Handle repeat functionality
     if (taskData.repeat === 'daily' || taskData.repeat === 'weekly') {
+      console.log('[FirebaseUserService] Creating repeated tasks for:', taskData.repeat);
       const startDateObj = new Date(startDate);
       const endDate = taskData.repeatUntil ? new Date(taskData.repeatUntil) : null;
       const increment = taskData.repeat === 'daily' ? 1 : 7; // 1 day or 7 days
@@ -699,7 +988,7 @@ export class FirebaseUserService {
             status: 'upcoming',
             completed: 0,
             date: futureDateStr,
-            created: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
             isRepeating: true,
             originalTaskId: mainTask.id
           });
@@ -709,20 +998,32 @@ export class FirebaseUserService {
         currentDate.setDate(currentDate.getDate() + increment);
         dayCounter++;
       }
+      console.log('[FirebaseUserService] Created', tasksToCreate.length, 'tasks total (including repeats)');
     }
 
     const updatedTasks = [...currentTasks, ...tasksToCreate];
+    console.log('[FirebaseUserService] updatedTasks count:', updatedTasks.length);
 
+    // Save to new schema location only
     const updates = {
-      focusTasks: updatedTasks,
+      'tasks.focus': updatedTasks,
       lastUpdated: serverTimestamp()
     };
 
-    await updateDoc(this.userRef, updates);
-    return { newTask: mainTask, updatedTasks };
+    console.log('[FirebaseUserService] Saving to Firestore with updates:', Object.keys(updates));
+    try {
+      await updateDoc(this.userRef, updates);
+      console.log('[FirebaseUserService] ✅ Save successful! Saved', updatedTasks.length, 'tasks');
+      return { newTask: mainTask, updatedTasks };
+    } catch (error) {
+      console.error('[FirebaseUserService] ❌ Save failed with error:', error);
+      console.error('[FirebaseUserService] Error code:', error.code);
+      console.error('[FirebaseUserService] Error message:', error.message);
+      throw error;
+    }
   }
 
-  // Update an existing focus task
+  // Update an existing focus task (NEW SCHEMA)
   async updateFocusTask(taskId, updatedTaskData, currentTasks) {
     const updatedTasks = currentTasks.map(task => {
       if (task.id === taskId) {
@@ -730,7 +1031,7 @@ export class FirebaseUserService {
           ...task,
           ...updatedTaskData,
           id: taskId, // Preserve the original ID
-          created: task.created, // Preserve creation date
+          createdAt: task.createdAt || task.created, // Preserve creation date
           lastModified: new Date().toISOString()
         };
       }
@@ -738,7 +1039,7 @@ export class FirebaseUserService {
     });
 
     const updates = {
-      focusTasks: updatedTasks,
+      'tasks.focus': updatedTasks,
       lastUpdated: serverTimestamp()
     };
 
@@ -746,7 +1047,7 @@ export class FirebaseUserService {
     return { updatedTasks };
   }
 
-  // Update focus task progress
+  // Update focus task progress (NEW SCHEMA)
   async updateFocusTaskProgress(taskId, minutesCompleted, currentTasks) {
     const updatedTasks = currentTasks.map(task => {
       if (task.id === taskId) {
@@ -763,7 +1064,7 @@ export class FirebaseUserService {
     });
 
     const updates = {
-      focusTasks: updatedTasks,
+      'tasks.focus': updatedTasks,
       lastUpdated: serverTimestamp()
     };
 
@@ -771,12 +1072,12 @@ export class FirebaseUserService {
     return { updatedTasks };
   }
 
-  // Delete focus task
+  // Delete focus task (NEW SCHEMA)
   async deleteFocusTask(taskId, currentTasks) {
     const updatedTasks = currentTasks.filter(task => task.id !== taskId);
 
     const updates = {
-      focusTasks: updatedTasks,
+      'tasks.focus': updatedTasks,
       lastUpdated: serverTimestamp()
     };
 
@@ -784,7 +1085,7 @@ export class FirebaseUserService {
     return { updatedTasks };
   }
 
-  // Delete entire series of repeated tasks
+  // Delete entire series of repeated tasks (NEW SCHEMA)
   async deleteFocusTaskSeries(taskId, currentTasks) {
     const taskToDelete = currentTasks.find(task => task.id === taskId);
     if (!taskToDelete) {
@@ -800,7 +1101,7 @@ export class FirebaseUserService {
     );
 
     const updates = {
-      focusTasks: updatedTasks,
+      'tasks.focus': updatedTasks,
       lastUpdated: serverTimestamp()
     };
 
@@ -808,7 +1109,7 @@ export class FirebaseUserService {
     return { updatedTasks };
   }
 
-  // Add reflection to focus task
+  // Add reflection to focus task (NEW SCHEMA)
   async addFocusTaskReflection(taskId, reflection, currentTasks) {
     const updatedTasks = currentTasks.map(task => {
       if (task.id === taskId) {
@@ -822,7 +1123,7 @@ export class FirebaseUserService {
     });
 
     const updates = {
-      focusTasks: updatedTasks,
+      'tasks.focus': updatedTasks,
       lastUpdated: serverTimestamp()
     };
 
@@ -836,15 +1137,16 @@ export class FirebaseUserService {
       const userDoc = await getDoc(this.userRef);
       if (userDoc.exists()) {
         const data = userDoc.data();
-        const tasks = data.focusTasks || [];
+        // Support both old and new schema for reading
+        const tasks = data.tasks?.focus || data.focusTasks || [];
 
         // Check and create missing repeated tasks
         const updatedTasks = await this.checkAndCreateRepeatedTasks(tasks);
 
-        // If new tasks were created, save them
+        // If new tasks were created, save them (NEW SCHEMA ONLY)
         if (updatedTasks.length > tasks.length) {
           await updateDoc(this.userRef, {
-            focusTasks: updatedTasks,
+            'tasks.focus': updatedTasks,
             lastUpdated: serverTimestamp()
           });
         }
@@ -974,19 +1276,21 @@ export class FirebaseUserService {
 
 
 
-  // Journal Entry Methods
+  // Journal Entry Methods (NEW SCHEMA)
   async saveJournalEntry(entry) {
     try {
       const userDoc = await getDoc(this.userRef);
       const currentData = userDoc.exists() ? userDoc.data() : {};
-      const currentEntries = currentData.journalEntries || [];
+      const currentEntries = currentData.custom?.journal || [];
 
       const updatedEntries = [entry, ...currentEntries];
 
-      await updateDoc(this.userRef, {
-        journalEntries: updatedEntries,
+      const updates = {
+        'custom.journal': updatedEntries,
         lastUpdated: serverTimestamp()
-      });
+      };
+
+      await updateDoc(this.userRef, updates);
 
       return updatedEntries;
     } catch (error) {
@@ -999,7 +1303,7 @@ export class FirebaseUserService {
     try {
       const userDoc = await getDoc(this.userRef);
       const currentData = userDoc.exists() ? userDoc.data() : {};
-      const currentEntries = currentData.journalEntries || [];
+      const currentEntries = currentData.custom?.journal || [];
 
       const updatedEntries = currentEntries.map(entry =>
         entry.id === entryId
@@ -1007,10 +1311,12 @@ export class FirebaseUserService {
           : entry
       );
 
-      await updateDoc(this.userRef, {
-        journalEntries: updatedEntries,
+      const updates = {
+        'custom.journal': updatedEntries,
         lastUpdated: serverTimestamp()
-      });
+      };
+
+      await updateDoc(this.userRef, updates);
 
       return updatedEntries;
     } catch (error) {
@@ -1023,14 +1329,16 @@ export class FirebaseUserService {
     try {
       const userDoc = await getDoc(this.userRef);
       const currentData = userDoc.exists() ? userDoc.data() : {};
-      const currentEntries = currentData.journalEntries || [];
+      const currentEntries = currentData.custom?.journal || [];
 
       const updatedEntries = currentEntries.filter(entry => entry.id !== entryId);
 
-      await updateDoc(this.userRef, {
-        journalEntries: updatedEntries,
+      const updates = {
+        'custom.journal': updatedEntries,
         lastUpdated: serverTimestamp()
-      });
+      };
+
+      await updateDoc(this.userRef, updates);
 
       return updatedEntries;
     } catch (error) {
@@ -1089,14 +1397,16 @@ export class FirebaseUserService {
     }
   }
 
-  // Get activities for a specific date (checks both current data and archives)
+  // Get activities for a specific date (checks both current data and new schema history)
   async getActivitiesForDate(date) {
     try {
+      console.log('[FirebaseUserService] getActivitiesForDate called for:', date);
+      
       // Force fresh fetch from Firestore (no cache)
       const userDoc = await getDoc(this.userRef);
       
       if (!userDoc.exists()) {
-        console.warn('User document does not exist');
+        console.warn('[FirebaseUserService] User document does not exist');
         return {
           water: [],
           diet: [],
@@ -1107,31 +1417,14 @@ export class FirebaseUserService {
       }
 
       const data = userDoc.data();
-      const targetDate = new Date(date).toISOString().slice(0, 10);
-      const today = new Date().toISOString().slice(0, 10);
-
-      // Check if we have archived data for this date
-      const dailyArchives = data.dailyArchives || {};
-      let archivedData = null;
+      console.log('[FirebaseUserService] User data loaded, checking for date:', date);
+      console.log('[FirebaseUserService] Available data keys:', Object.keys(data));
       
-      // NEVER use archived data for today - always use live data
-      if (targetDate !== today) {
-        archivedData = dailyArchives[targetDate];
-      }
-
-      // If no archived data exists for a past date, try to create it from current data
-      if (!archivedData && targetDate !== today) {
-        const updatedArchives = await this.archiveDayData(targetDate, data);
-        archivedData = updatedArchives[targetDate];
-        
-        // Save the updated archives
-        if (archivedData) {
-          await updateDoc(this.userRef, {
-            dailyArchives: updatedArchives,
-            lastUpdated: serverTimestamp()
-          });
-        }
-      }
+      // Don't convert the date - use it as-is since it's already in YYYY-MM-DD format
+      const targetDate = date;
+      const today = new Date().toISOString().slice(0, 10);
+      
+      console.log('[FirebaseUserService] Target date:', targetDate, 'Today:', today);
 
       let activities = {
         water: [],
@@ -1141,14 +1434,24 @@ export class FirebaseUserService {
         mentalWellness: []
       };
 
-      // For today, ALWAYS check current data (including in-progress workout)
-      // even if archived data exists, because user might be actively working out
+      // For today, ALWAYS use current data from new schema
       if (targetDate === today) {
-        // For today, get current data
-        const completedWorkouts = (data.workoutHistory || []).filter(workout => {
-          if (!workout.date) return false;
-          return workout.date === targetDate;
+        console.log('[FirebaseUserService] Loading TODAY\'s data from current schema');
+        console.log('[FirebaseUserService] activities.workouts count:', data.activities?.workouts?.length || 0);
+        console.log('[FirebaseUserService] tasks.focus count:', data.tasks?.focus?.length || 0);
+        
+        // Get current data from NEW SCHEMA
+        const completedWorkouts = (data.activities?.workouts || []).filter(workout => {
+          if (!workout.startTime) return false;
+          try {
+            const workoutDate = new Date(workout.startTime).toISOString().slice(0, 10);
+            return workoutDate === targetDate;
+          } catch (error) {
+            return false;
+          }
         });
+
+        console.log('[FirebaseUserService] Completed workouts for today:', completedWorkouts.length);
 
         // Check for in-progress workout for today
         const inProgressWorkout = data.currentWorkoutProgress;
@@ -1162,7 +1465,6 @@ export class FirebaseUserService {
             const inProgressWorkoutData = {
               ...inProgressWorkout,
               isInProgress: true,
-              date: targetDate,
               planName: inProgressWorkout.planName || 'In Progress',
               exercises: inProgressWorkout.exercises || [],
               id: inProgressWorkout.id || Date.now()
@@ -1172,7 +1474,7 @@ export class FirebaseUserService {
         }
 
         activities = {
-          water: (data.waterLogs || []).filter(log => {
+          water: (data.activities?.water || []).filter(log => {
             if (!log.time) return false;
             try {
               const logDate = new Date(log.time).toISOString().slice(0, 10);
@@ -1182,7 +1484,7 @@ export class FirebaseUserService {
               return false;
             }
           }),
-          diet: (data.meals || []).filter(meal => {
+          diet: (data.activities?.meals || []).filter(meal => {
             if (!meal.time) return false;
             try {
               const mealDate = new Date(meal.time).toISOString().slice(0, 10);
@@ -1193,11 +1495,11 @@ export class FirebaseUserService {
             }
           }),
           workout: workouts,
-          focus: (data.focusTasks || []).filter(task => {
+          focus: (data.tasks?.focus || []).filter(task => {
             if (!task.date) return false;
             return task.date === targetDate;
           }),
-          mentalWellness: (data.mentalHealthLogs || []).filter(log => {
+          mentalWellness: (data.activities?.mentalHealth || []).filter(log => {
             if (!log.time) return false;
             try {
               const logDate = new Date(log.time).toISOString().slice(0, 10);
@@ -1208,59 +1510,128 @@ export class FirebaseUserService {
             }
           })
         };
-      } else if (archivedData && archivedData.activities) {
-        // For past dates, use archived data if available
-        activities = {
-          water: archivedData.activities.water || [],
-          diet: archivedData.activities.meals || [],
-          workout: archivedData.activities.workouts || [],
-          focus: archivedData.activities.focus || [],
-          mentalWellness: archivedData.activities.mentalWellness || []
-        };
       } else {
-        // For past dates without archived data, check current arrays (fallback)
-        activities = {
-          water: (data.waterLogs || []).filter(log => {
-            if (!log.time) return false;
-            try {
-              const logDate = new Date(log.time).toISOString().slice(0, 10);
-              return logDate === targetDate;
-            } catch (error) {
-              return false;
-            }
-          }),
-          diet: (data.meals || []).filter(meal => {
-            if (!meal.time) return false;
-            try {
-              const mealDate = new Date(meal.time).toISOString().slice(0, 10);
-              return mealDate === targetDate;
-            } catch (error) {
-              return false;
-            }
-          }),
-          workout: (data.workoutHistory || []).filter(workout => {
-            if (!workout.date) return false;
-            return workout.date === targetDate;
-          }),
-          focus: (data.focusTasks || []).filter(task => {
-            if (!task.date) return false;
-            return task.date === targetDate;
-          }),
-          mentalWellness: (data.mentalHealthLogs || []).filter(log => {
-            if (!log.time) return false;
-            try {
-              const logDate = new Date(log.time).toISOString().slice(0, 10);
-              return logDate === targetDate;
-            } catch (error) {
-              return false;
-            }
-          })
-        };
+        // For past dates, check NEW SCHEMA history first
+        console.log('[FirebaseUserService] Loading PAST date data from history');
+        console.log('[FirebaseUserService] Checking data.history for key:', targetDate);
+        console.log('[FirebaseUserService] data.history exists:', !!data.history);
+        
+        if (data.history) {
+          console.log('[FirebaseUserService] data.history keys:', Object.keys(data.history));
+          console.log('[FirebaseUserService] Looking for exact key:', targetDate);
+          console.log('[FirebaseUserService] Key exists in history:', targetDate in data.history);
+        }
+        
+        const historyEntry = data.history?.[targetDate];
+        console.log('[FirebaseUserService] historyEntry found:', !!historyEntry);
+        
+        if (historyEntry) {
+          console.log('[FirebaseUserService] historyEntry keys:', Object.keys(historyEntry));
+          console.log('[FirebaseUserService] historyEntry.activities exists:', !!historyEntry.activities);
+          
+          if (historyEntry.activities) {
+            console.log('[FirebaseUserService] historyEntry.activities keys:', Object.keys(historyEntry.activities));
+          }
+        }
+        
+        if (historyEntry && historyEntry.activities) {
+          console.log('[FirebaseUserService] Using data from NEW SCHEMA history');
+          console.log('[FirebaseUserService] Raw meals data:', historyEntry.activities.meals);
+          console.log('[FirebaseUserService] Raw water data:', historyEntry.activities.water);
+          console.log('[FirebaseUserService] meals count:', historyEntry.activities.meals?.length || 0);
+          console.log('[FirebaseUserService] water count:', historyEntry.activities.water?.length || 0);
+          console.log('[FirebaseUserService] workouts count:', historyEntry.activities.workouts?.length || 0);
+          console.log('[FirebaseUserService] focus count:', historyEntry.activities.focus?.length || 0);
+          console.log('[FirebaseUserService] mentalHealth count:', historyEntry.activities.mentalHealth?.length || 0);
+          
+          // Use data from new schema history
+          activities = {
+            water: historyEntry.activities.water || [],
+            diet: historyEntry.activities.meals || [],
+            workout: historyEntry.activities.workouts || [],
+            focus: historyEntry.activities.focus || [],
+            mentalWellness: historyEntry.activities.mentalHealth || []
+          };
+          
+          console.log('[FirebaseUserService] Final activities object:', {
+            water: activities.water.length,
+            diet: activities.diet.length,
+            workout: activities.workout.length,
+            focus: activities.focus.length,
+            mentalWellness: activities.mentalWellness.length
+          });
+        } else {
+          // Fallback: check old dailyArchives (backward compatibility)
+          const dailyArchives = data.dailyArchives || {};
+          const archivedData = dailyArchives[targetDate];
+          
+          if (archivedData && archivedData.activities) {
+            activities = {
+              water: archivedData.activities.water || [],
+              diet: archivedData.activities.meals || [],
+              workout: archivedData.activities.workouts || [],
+              focus: archivedData.activities.focus || [],
+              mentalWellness: archivedData.activities.mentalWellness || []
+            };
+          } else {
+            // Last fallback: filter current arrays by date (for data not yet archived)
+            activities = {
+              water: (data.activities?.water || []).filter(log => {
+                if (!log.time) return false;
+                try {
+                  const logDate = new Date(log.time).toISOString().slice(0, 10);
+                  return logDate === targetDate;
+                } catch (error) {
+                  return false;
+                }
+              }),
+              diet: (data.activities?.meals || []).filter(meal => {
+                if (!meal.time) return false;
+                try {
+                  const mealDate = new Date(meal.time).toISOString().slice(0, 10);
+                  return mealDate === targetDate;
+                } catch (error) {
+                  return false;
+                }
+              }),
+              workout: (data.activities?.workouts || []).filter(workout => {
+                if (!workout.startTime) return false;
+                try {
+                  const workoutDate = new Date(workout.startTime).toISOString().slice(0, 10);
+                  return workoutDate === targetDate;
+                } catch (error) {
+                  return false;
+                }
+              }),
+              focus: (data.tasks?.focus || []).filter(task => {
+                if (!task.date) return false;
+                return task.date === targetDate;
+              }),
+              mentalWellness: (data.activities?.mentalHealth || []).filter(log => {
+                if (!log.time) return false;
+                try {
+                  const logDate = new Date(log.time).toISOString().slice(0, 10);
+                  return logDate === targetDate;
+                } catch (error) {
+                  return false;
+                }
+              })
+            };
+          }
+        }
       }
 
+      console.log('[FirebaseUserService] Returning activities:', {
+        water: activities.water.length,
+        diet: activities.diet.length,
+        workout: activities.workout.length,
+        focus: activities.focus.length,
+        mentalWellness: activities.mentalWellness.length
+      });
+      
       return activities;
     } catch (error) {
-      console.error('Error getting activities for date:', error);
+      console.error('[FirebaseUserService] Error getting activities for date:', error);
       return {
         water: [],
         diet: [],
@@ -1271,44 +1642,23 @@ export class FirebaseUserService {
     }
   }
 
-  // Real-time listener for user progress updates
+
+
+  // Real-time listener for user progress updates (NEW SCHEMA)
   subscribeToUserProgress(callback) {
     return onSnapshot(this.userRef, (doc) => {
       if (doc.exists()) {
         const data = doc.data();
+        
+        // Return new schema format with ensured structure
+        const structuredData = this.ensureSchemaStructure(data);
+        
+        // Add in-progress workout from new schema location
+        const currentWorkoutProgress = data.currentWorkoutProgress || null;
+        
         callback({
-          focusLogs: data.focusLogs || [],
-          focusTasks: data.focusTasks || [],
-          focusProgress: data.focusProgress || 0,
-          mentalHealthProgress: data.mentalHealthProgress || 0,
-          waterProgress: data.waterProgress || 0,
-          dietCalories: data.dietCalories || 0,
-          workoutCompleted: data.workoutCompleted || false,
-          waterGoalMet: data.waterGoalMet || false,
-          dietGoalMet: data.dietGoalMet || false,
-          // Goals
-          dailyFocusGoal: data.dailyFocusGoal || 60,
-          dailyCalorieGoal: data.dailyCalorieGoal || 2000,
-          waterGoal: data.waterGoal || 3000,
-          // Data arrays
-          meals: data.meals || [],
-          waterLogs: data.waterLogs || [],
-          mentalHealthLogs: data.mentalHealthLogs || [],
-          workoutHistory: data.workoutHistory || [],
-          customWorkouts: data.customWorkouts || [],
-          journalEntries: data.journalEntries || [],
-          // XP data
-          xp: data.xp || 0,
-          dailyXp: data.dailyXp || 0,
-          streakDays: data.streakDays || 0,
-          lastActiveDate: data.lastActiveDate || null,
-          lastStreakDate: data.lastStreakDate || null,
-          // Other fields
-          level: data.level || 1,
-          streakCount: data.streakCount || 0,
-          calendar: data.calendar || [],
-          // In-progress workout
-          currentWorkoutSession: data.currentWorkoutProgress || null
+          ...structuredData,
+          currentWorkoutSession: currentWorkoutProgress
         });
       }
     }, (error) => {
@@ -1316,13 +1666,15 @@ export class FirebaseUserService {
     });
   }
 
-  // Mental Health Activity Logging
+  // Mental Health Activity Logging (NEW SCHEMA)
   async updateMentalHealthProgress(newProgress) {
     try {
-      await updateDoc(this.userRef, {
-        mentalHealthProgress: newProgress,
+      const updates = {
+        'today.progress.mentalHealth': newProgress,
         lastUpdated: serverTimestamp()
-      });
+      };
+      
+      await updateDoc(this.userRef, updates);
       return { newProgress };
     } catch (error) {
       console.error('Error updating mental health progress:', error);
@@ -1334,10 +1686,12 @@ export class FirebaseUserService {
     try {
       const updatedLogs = [...currentLogs, activityLog];
 
-      await updateDoc(this.userRef, {
-        mentalHealthLogs: updatedLogs,
+      const updates = {
+        'activities.mentalHealth': updatedLogs,
         lastUpdated: serverTimestamp()
-      });
+      };
+
+      await updateDoc(this.userRef, updates);
 
       return { updatedLogs };
     } catch (error) {
@@ -1346,19 +1700,19 @@ export class FirebaseUserService {
     }
   }
 
-  // XP Data Management
+  // XP Data Management (NEW SCHEMA)
   async loadXpData() {
     try {
       const userDoc = await getDoc(this.userRef);
       if (userDoc.exists()) {
         const data = userDoc.data();
         return {
-          xp: data.xp || 0,
-          level: data.level || 1,
-          streakDays: data.streakDays || 0,
-          lastActiveDate: data.lastActiveDate || null,
+          xp: data.profile?.xp || 0,
+          level: data.profile?.level || 1,
+          streakDays: data.profile?.streakDays || 0,
+          lastActiveDate: data.profile?.lastActiveDate || null,
           dailyXp: data.dailyXp || 0,
-          lastStreakDate: data.lastStreakDate || null
+          lastStreakDate: data.profile?.lastStreakDate || null
         };
       }
       return {
@@ -1377,15 +1731,16 @@ export class FirebaseUserService {
 
   async updateXpData(xpData) {
     try {
-      await updateDoc(this.userRef, {
-        xp: xpData.xp,
-        level: xpData.level,
-        streakDays: xpData.streakDays,
-        lastActiveDate: xpData.lastActiveDate,
-        dailyXp: xpData.dailyXp,
-        lastStreakDate: xpData.lastStreakDate,
+      const updates = {
+        'profile.xp': xpData.xp,
+        'profile.level': xpData.level,
+        'profile.streakDays': xpData.streakDays,
+        'profile.lastActiveDate': xpData.lastActiveDate,
+        'profile.lastStreakDate': xpData.lastStreakDate,
         lastUpdated: serverTimestamp()
-      });
+      };
+      
+      await updateDoc(this.userRef, updates);
     } catch (error) {
       console.error('Error updating XP data:', error);
       throw error;

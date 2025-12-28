@@ -12,7 +12,7 @@ const tags = [
   { id: 'personalwork', label: 'Personal Work', color: 'bg-indigo-500/20 text-indigo-300' },
 ]
 
-export default function AddTaskModal({ isOpen, onClose, editTask = null }) {
+export default function AddTaskModal({ isOpen, onClose, editTask = null, loadFocusTasks }) {
   const { saveFocusTask, updateFocusTask } = useUserStore()
   const today = new Date()
   const defaultDate = today.toISOString().slice(0, 10)
@@ -93,16 +93,34 @@ export default function AddTaskModal({ isOpen, onClose, editTask = null }) {
     }
 
     try {
+      console.log('[AddTaskModal] Saving focus task with data:', taskData)
+      
+      let savedTask
       if (editTask) {
         // Update existing task using the proper update method
-        await updateFocusTask(editTask.id, taskData)
+        const result = await updateFocusTask(editTask.id, taskData)
+        console.log('[AddTaskModal] Task updated successfully:', result)
+        savedTask = result
       } else {
         // Create new task
-        await saveFocusTask(taskData)
+        savedTask = await saveFocusTask(taskData)
+        console.log('[AddTaskModal] Task saved successfully:', savedTask)
       }
+      
+      // Close modal first for better UX
       onClose()
+      
+      // Force reload after a tiny delay to ensure state has settled
+      setTimeout(async () => {
+        console.log('[AddTaskModal] Reloading tasks after save...')
+        if (loadFocusTasks) {
+          await loadFocusTasks()
+          console.log('[AddTaskModal] Tasks reloaded')
+        }
+      }, 50)
     } catch (error) {
-      console.error('Error saving focus task:', error)
+      console.error('[AddTaskModal] Error saving focus task:', error)
+      alert('Failed to save task: ' + error.message)
     }
   }
 

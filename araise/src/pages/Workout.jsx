@@ -21,6 +21,7 @@ import CategorySelection from "../components/workout/CategorySelection"
 import SplitDetail from "../components/workout/SplitDetail"
 import DayExerciseView from "../components/workout/DayExerciseView"
 import WorkoutSession from "../components/workout/WorkoutSession"
+import CustomWorkoutSession from "../components/workout/CustomWorkoutSession"
 import CameraSelectionModal from "../components/CameraSelectionModal"
 import { workoutData, exerciseLibrary } from "../data/workoutData"
 import { customWorkoutExercises, exerciseHelpers, exerciseCategories } from "../data/customWorkoutExercises"
@@ -828,356 +829,6 @@ function MyCustomWorkouts() {
   )
 }
 
-// Custom Workout Session Component
-function CustomWorkoutSession() {
-  const { workoutId } = useParams()
-  const navigate = useNavigate()
-  const { 
-    customWorkouts, 
-    loadCustomWorkouts, 
-    startWorkoutSession, 
-    updateExerciseInSession, 
-    currentWorkoutSession,
-    saveWorkoutSession 
-  } = useUserStore()
-  const [currentExercise, setCurrentExercise] = useState(0)
-  const [workout, setWorkout] = useState(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [showCameraModal, setShowCameraModal] = useState(false)
-  const [pendingExercise, setPendingExercise] = useState(null)
-  const [completedSets, setCompletedSets] = useState({})
-  const [workoutSession, setWorkoutSession] = useState(null)
-  const [isSaving, setIsSaving] = useState(false)
-
-  useEffect(() => {
-    const loadWorkout = async () => {
-      setIsLoading(true)
-      try {
-        await loadCustomWorkouts()
-        const foundWorkout = customWorkouts.find(w => w.id === parseInt(workoutId))
-        setWorkout(foundWorkout)
-      } catch (error) {
-        console.error('Error loading workout:', error)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    
-    loadWorkout()
-  }, [workoutId, loadCustomWorkouts])
-
-  // Also check when customWorkouts updates
-  useEffect(() => {
-    if (customWorkouts.length > 0) {
-      const foundWorkout = customWorkouts.find(w => w.id === parseInt(workoutId))
-      setWorkout(foundWorkout)
-      setIsLoading(false)
-    }
-  }, [customWorkouts, workoutId])
-
-  // Initialize workout session when workout is loaded
-  useEffect(() => {
-    if (workout && !currentWorkoutSession) {
-      const workoutPlan = {
-        planName: workout.name,
-        planId: `custom-${workout.id}`,
-        dayId: null,
-        type: "custom",
-        exercises: workout.exercises.map(exercise => ({
-          ...exercise,
-          completed: false,
-          completedSets: 0,
-          totalSets: parseInt(exercise.sets) || 1,
-          setProgress: {}
-        }))
-      }
-      
-      const session = startWorkoutSession(workoutPlan)
-      setWorkoutSession(session)
-    }
-  }, [workout, currentWorkoutSession, startWorkoutSession])
-
-  // Load saved progress when currentWorkoutSession updates
-  useEffect(() => {
-    if (currentWorkoutSession && currentWorkoutSession.exercises) {
-      // Restore completed sets from saved session
-      const savedSets = {}
-      currentWorkoutSession.exercises.forEach((exercise, exerciseIndex) => {
-        if (exercise.setProgress) {
-          Object.keys(exercise.setProgress).forEach(key => {
-            savedSets[key] = exercise.setProgress[key]
-          })
-        }
-      })
-      setCompletedSets(savedSets)
-      
-      // If there's a current exercise saved, navigate to it
-      if (currentWorkoutSession.currentExercise !== undefined) {
-        setCurrentExercise(currentWorkoutSession.currentExercise)
-      }
-    }
-  }, [currentWorkoutSession])
-
-  if (isLoading) {
-    return <div className="text-center text-ar-gray">Loading workout...</div>
-  }
-
-  if (!workout) {
-    return <div className="text-center text-ar-gray">Workout not found</div>
-  }
-
-  const exercise = workout.exercises[currentExercise]
-  const isLastExercise = currentExercise === workout.exercises.length - 1
-
-  const handleSetComplete = (exerciseIndex, setIndex) => {
-    const key = `${exerciseIndex}-${setIndex}`
-    const newCompletedSets = {
-      ...completedSets,
-      [key]: !completedSets[key]
-    }
-    setCompletedSets(newCompletedSets)
-    
-    // Calculate completed sets count for this exercise
-    const totalSets = parseInt(exercise.sets) || 3
-    let completedCount = 0
-    for (let i = 0; i < totalSets; i++) {
-      if (newCompletedSets[`${exerciseIndex}-${i}`]) {
-        completedCount++
-      }
-    }
-    
-    // Update exercise in session with real-time saving
-    const isExerciseCompleted = completedCount === totalSets
-    updateExerciseInSession(exerciseIndex, {
-      completedSets: completedCount,
-      completed: isExerciseCompleted,
-      setProgress: newCompletedSets
-    })
-    
-    // Auto-save progress to Firebase
-    saveWorkoutProgress(exerciseIndex, completedCount, isExerciseCompleted, newCompletedSets)
-  }
-
-  const saveWorkoutProgress = async (exerciseIndex, completedSets, isCompleted, setProgress) => {
-    if (!currentWorkoutSession) return
-    
-    setIsSaving(true)
-    try {
-      const progressData = {
-        id: currentWorkoutSession.id,
-        planName: currentWorkoutSession.planName,
-        planId: currentWorkoutSession.planId,
-        dayId: currentWorkoutSession.dayId,
-        type: currentWorkoutSession.type,
-        startTime: currentWorkoutSession.startTime,
-        currentExercise: exerciseIndex,
-        exercises: currentWorkoutSession.exercises.map((ex, idx) => ({
-          ...ex,
-          completed: idx === exerciseIndex ? isCompleted : ex.completed,
-          completedSets: idx === exerciseIndex ? completedSets : ex.completedSets,
-          setProgress: idx === exerciseIndex ? setProgress : ex.setProgress
-        })),
-        isInProgress: true,
-        lastUpdated: new Date().toISOString()
-      }
-      
-      await saveWorkoutSession(progressData)
-    } catch (error) {
-      console.error('Error saving workout progress:', error)
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  const getCompletedSetsCount = (exerciseIndex) => {
-    const totalSets = parseInt(exercise.sets) || 3
-    let completed = 0
-    for (let i = 0; i < totalSets; i++) {
-      if (completedSets[`${exerciseIndex}-${i}`]) {
-        completed++
-      }
-    }
-    return completed
-  }
-
-  const isExerciseComplete = (exerciseIndex) => {
-    const totalSets = parseInt(exercise.sets) || 3
-    return getCompletedSetsCount(exerciseIndex) === totalSets
-  }
-
-  const handleNext = async () => {
-    // Save current exercise progress before moving to next
-    if (currentWorkoutSession) {
-      const completedCount = getCompletedSetsCount(currentExercise)
-      const isCompleted = isExerciseComplete(currentExercise)
-      await saveWorkoutProgress(currentExercise, completedCount, isCompleted, completedSets)
-    }
-    
-    if (isLastExercise) {
-      navigate(`/workout/custom/${workoutId}/complete`)
-    } else {
-      setCurrentExercise(currentExercise + 1)
-    }
-  }
-
-  const handleAnalyzer = () => {
-    if (isMobile()) {
-      // On mobile, show camera selection modal first
-      setPendingExercise(exercise)
-      setShowCameraModal(true)
-    } else {
-      // On desktop, proceed directly with default camera
-      navigate(`/workout/custom/${workoutId}/session/${exercise.id}/analyzer/${exercise.exerciseName}`, {
-        state: { cameraFacingMode: 'user' }
-      })
-    }
-  }
-
-  const handleCameraSelection = (facingMode) => {
-    if (pendingExercise) {
-      navigate(`/workout/custom/${workoutId}/session/${pendingExercise.id}/analyzer/${pendingExercise.exerciseName}`, {
-        state: { cameraFacingMode: facingMode }
-      })
-    }
-    setShowCameraModal(false)
-    setPendingExercise(null)
-  }
-
-  const handleCameraModalClose = () => {
-    setShowCameraModal(false)
-    setPendingExercise(null)
-  }
-
-  return (
-    <div className="max-w-4xl mx-auto space-y-3 md:space-y-4">
-      {/* Progress Bar */}
-      <motion.div
-        className="glass-card p-3 md:p-4 rounded-2xl"
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-      >
-        <div className="flex justify-between items-center mb-1 md:mb-2">
-          <span className="text-ar-gray">Progress</span>
-          <span className="text-ar-violet font-bold">
-            {currentExercise + 1} / {workout.exercises.length}
-          </span>
-        </div>
-        <div className="w-full bg-ar-dark-gray rounded-full h-3">
-          <motion.div
-            className="bg-ar-violet h-3 rounded-full"
-            initial={{ width: 0 }}
-            animate={{ width: `${((currentExercise + 1) / workout.exercises.length) * 100}%` }}
-            transition={{ duration: 0.5 }}
-          />
-        </div>
-      </motion.div>
-
-      {/* Exercise Display */}
-      <motion.div
-        className="glass-card p-3 md:p-4 rounded-2xl text-center"
-        key={currentExercise}
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5 }}
-      >
-        {/* Exercise Animation */}
-        <div className="w-64 h-96 md:w-72 md:h-[28rem] mx-auto mb-3 md:mb-4 bg-ar-violet/20 rounded-2xl overflow-hidden">
-          <div className="w-full h-full flex items-center justify-center">
-            <motion.div
-              animate={{
-                scale: [1, 1.1, 1],
-                rotate: [0, 5, -5, 0]
-              }}
-              transition={{
-                duration: 2,
-                repeat: Infinity,
-                ease: "easeInOut"
-              }}
-            >
-              <Sparkles className="text-ar-violet" size={64} />
-            </motion.div>
-          </div>
-        </div>
-
-        <h2 className="text-2xl md:text-3xl font-bold mb-1 md:mb-2">{exercise.exerciseName}</h2>
-        <p className="text-ar-violet text-lg md:text-xl font-bold mb-1">
-          {exercise.sets ? `${exercise.sets} sets × ${exercise.reps} reps` : exercise.duration}
-        </p>
-        <p className="text-ar-gray mb-3 md:mb-4">Custom Exercise</p>
-
-        {/* Set Tracking Circles - Only show for exercises with sets */}
-        {exercise.sets && (
-          <div className="mb-4 md:mb-6">
-            <p className="text-sm text-ar-gray mb-3">Track your sets:</p>
-            <div className="flex justify-center gap-3">
-              {Array.from({ length: parseInt(exercise.sets) || 3 }, (_, index) => {
-                const isCompleted = completedSets[`${currentExercise}-${index}`]
-                return (
-                  <motion.button
-                    key={index}
-                    onClick={() => handleSetComplete(currentExercise, index)}
-                    className={`w-12 h-12 rounded-full border-2 transition-all duration-300 flex items-center justify-center font-bold ${
-                      isCompleted
-                        ? 'bg-ar-violet border-transparent text-white shadow-lg'
-                        : 'border-ar-gray-600 text-ar-gray-400 hover:border-ar-violet/50 hover:text-ar-violet'
-                    }`}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    {index + 1}
-                  </motion.button>
-                )
-              })}
-            </div>
-            <p className="text-xs text-ar-gray mt-2">
-              {getCompletedSetsCount(currentExercise)} of {exercise.sets} sets completed
-              {isSaving && <span className="ml-2 text-ar-violet">• Saving...</span>}
-            </p>
-          </div>
-        )}
-
-        <div className="flex flex-col gap-2 md:gap-3 justify-center px-4 md:px-0">
-          {exercise.pose_analyzer && (
-            <button
-              onClick={handleAnalyzer}
-              className="w-full bg-ar-blue hover:bg-ar-blue/80 text-white font-bold py-3 md:py-4 rounded-xl transition-all duration-300 hover:shadow-glow-blue"
-            >
-              <div className="flex items-center justify-center gap-2">
-                <Camera size={18} className="md:w-5 md:h-5" />
-                <span className="text-sm md:text-base">Form Analyzer</span>
-              </div>
-            </button>
-          )}
-
-          <button
-            onClick={handleNext}
-            className="w-full bg-ar-violet hover:bg-ar-violet/80 text-white font-bold py-3 md:py-4 rounded-xl transition-all duration-300 hover:shadow-glow-violet"
-          >
-            <div className="flex items-center justify-center gap-2">
-              <CheckCircle size={18} className="md:w-5 md:h-5" />
-              <span className="text-sm md:text-base">
-                {getCompletedSetsCount(currentExercise) > 0 && exercise.sets
-                  ? `Continue (${getCompletedSetsCount(currentExercise)}/${exercise.sets} sets)`
-                  : isLastExercise 
-                  ? 'Finish Workout' 
-                  : 'Next Exercise'}
-              </span>
-            </div>
-          </button>
-        </div>
-      </motion.div>
-
-      {/* Camera Selection Modal */}
-      <CameraSelectionModal
-        isOpen={showCameraModal}
-        onClose={handleCameraModalClose}
-        onSelect={handleCameraSelection}
-      />
-    </div>
-  )
-}
-
 // Custom Workout Complete Component
 function CustomWorkoutComplete() {
   const { workoutId } = useParams()
@@ -1207,46 +858,91 @@ function CustomWorkoutComplete() {
           
           try {
             const state = useUserStore.getState();
-            const { saveWorkoutSession, firebaseService } = state;
+            const { saveWorkoutSession, firebaseService, currentWorkoutSession } = state;
             
-            const workoutSessionData = {
-              id: Date.now(),
-              type: "custom",
-              planName: foundWorkout.name,
-              planId: `custom-${foundWorkout.id}`,
-              dayId: null,
-              category: "custom",
-              status: "completed", // Mark as completed
-              date: new Date().toISOString().slice(0, 10),
-              duration: 45, // Default duration for custom workouts
-              startTime: new Date().toISOString(),
-              endTime: new Date().toISOString(),
-              exercises: foundWorkout.exercises.map(exercise => ({
-                exerciseName: exercise.exerciseName,
-                sets: exercise.sets || 3,
-                reps: exercise.reps || 12,
-                weight: exercise.weight || 0,
-                completed: true
-              })),
-              completed: true,
-              totalExercises: foundWorkout.exercises.length,
-              completedExercises: foundWorkout.exercises.length,
-              goal: foundWorkout.goal
-            };
+            // Use actual session data if available, otherwise create from workout template
+            let workoutSessionData;
+            
+            if (currentWorkoutSession && currentWorkoutSession.planId === `custom-${foundWorkout.id}`) {
+              // Use the actual tracked session data
+              workoutSessionData = {
+                ...currentWorkoutSession,
+                status: "completed",
+                endTime: new Date().toISOString(),
+                duration: Math.round((new Date() - new Date(currentWorkoutSession.startTime)) / (1000 * 60)) || 45,
+                // Ensure all exercises have proper data structure
+                exercises: currentWorkoutSession.exercises.map(exercise => ({
+                  ...exercise,
+                  // Ensure proper exercise name mapping
+                  exerciseName: exercise.exerciseName || exercise.name,
+                  name: exercise.name || exercise.exerciseName,
+                  // Preserve all exercise metadata
+                  primaryMuscle: exercise.primaryMuscle,
+                  secondaryMuscles: exercise.secondaryMuscles,
+                  equipment: exercise.equipment,
+                  difficulty: exercise.difficulty,
+                  description: exercise.description,
+                  video: exercise.video,
+                  pose_analyzer: exercise.pose_analyzer,
+                  category: exercise.category,
+                  bodyPart: exercise.bodyPart,
+                  tags: exercise.tags
+                }))
+              };
+            } else {
+              // Fallback: create from workout template
+              workoutSessionData = {
+                id: Date.now(),
+                type: "custom",
+                planName: foundWorkout.name,
+                planId: `custom-${foundWorkout.id}`,
+                dayId: null,
+                category: "custom",
+                status: "completed",
+                date: new Date().toISOString().slice(0, 10),
+                duration: 45,
+                startTime: new Date().toISOString(),
+                endTime: new Date().toISOString(),
+                exercises: foundWorkout.exercises.map(exercise => ({
+                  exerciseName: exercise.exerciseName || exercise.name,
+                  name: exercise.name || exercise.exerciseName,
+                  sets: exercise.sets || exercise.customSets || 3,
+                  reps: exercise.reps || exercise.customReps || 12,
+                  weight: exercise.weight || 0,
+                  completed: true,
+                  completedSets: exercise.sets || exercise.customSets || 3,
+                  primaryMuscle: exercise.primaryMuscle,
+                  secondaryMuscles: exercise.secondaryMuscles,
+                  equipment: exercise.equipment,
+                  difficulty: exercise.difficulty,
+                  description: exercise.description,
+                  video: exercise.video,
+                  pose_analyzer: exercise.pose_analyzer,
+                  category: exercise.category,
+                  bodyPart: exercise.bodyPart,
+                  tags: exercise.tags,
+                  setProgress: {}
+                })),
+                completed: true,
+                totalExercises: foundWorkout.exercises.length,
+                completedExercises: foundWorkout.exercises.length,
+                goal: foundWorkout.goal
+              };
+            }
 
             if (!firebaseService) {
-              setWorkoutSaved(false); // Reset flag on error
+              setWorkoutSaved(false);
               return;
             }
             
             if (!saveWorkoutSession) {
-              setWorkoutSaved(false); // Reset flag on error
+              setWorkoutSaved(false);
               return;
             }
             
             await saveWorkoutSession(workoutSessionData);
           } catch (error) {
-            setWorkoutSaved(false); // Reset flag on error to allow retry
+            setWorkoutSaved(false);
           }
         }
       } catch (error) {
